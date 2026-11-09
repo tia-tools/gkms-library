@@ -19,7 +19,8 @@ Each milestone is one issue and one branch, merged through a pull request into `
 - [x] (2026-11-09 22:45Z) Design session (`/grill-me`): twelve decisions, recorded below as L1–L12 and in `docs/adr/0001`–`0005`; the repository scaffolded from project-template; this draft written.
 - [x] (2026-11-09 23:27Z) Milestones written out from a full reading of gakumas-supportcards at commit `f8be2dd` (its generator, published formats, image pipeline, update workflow and Worker), of what the two other apps load from it, and of the game's tables and the live published files (#1). Decisions L13–L27 added; issues #2–#5 filed, one per milestone; job #6 filed for the one open question.
 - [x] (2026-11-09 23:39Z) The user answered job #6 with A (plain skill card icons are published) and job #7 with A (version 1 reads the effects of support cards only); L20 is settled, and ADR 0001 has an addendum on the reading's scope.
-- [ ] Milestone 0 (prototyping, #2): the public bucket address measured, and the schema library chosen.
+- [x] (2026-11-09 23:57Z) Milestone 0 (#2), second question: the schema library is Valibot (L28), chosen by the trial in `prototypes/schema/`; its numbers are in Artifacts and Notes and ADR 0005's addendum.
+- [ ] Milestone 0 (#2), first question: the two buckets created (job #10 asks the user), the address measured, the probe objects and `prototypes/` deleted.
 - [ ] Milestone 1 (#3): the data, generated and checked here, written as releases to a local directory; the comparison check passes on it.
 - [ ] Milestone 2 (#4): the images, extracted here, with public copies and private masters; the sync command.
 - [ ] Milestone 3 (#5): the daily run publishes both; the comparison check runs in it; failures reach Discord; two consecutive unattended runs succeed.
@@ -171,6 +172,10 @@ The decisions are numbered L1, L2, … Decisions that outlive this plan are also
   Rationale: the library's token should not be able to deploy another app's Worker or write the shared bucket; changes on the user's Cloudflare account are confirmed first.
   Date/Author: 2026-11-10, agent.
 
+- Decision: L28 — the formats are written with Valibot (1.5.0 at the trial; MIT, no dependencies).
+  Rationale: by Milestone 0's rule, the smallest candidate whose message names the place of the bad value and that passes the other points. A minimal page that fetches and checks the idol list grew by 1,716 bytes gzipped with Valibot, 5,671 with Zod's small build and 46,254 with ArkType. Valibot's message for a number where a name belongs was `idols.2.name: Invalid type: Expected string but received 3`; Zod's small build ships no message texts and said `idols.2.name: Invalid input`; ArkType's was as clear as Valibot's at twenty-seven times the size. All three could hold the rule "each idol id once" inside the schema and type-checked under TypeScript 7.0.2 with this repository's strict settings. Each app copying a format file needs Valibot at major version 1. ADR 0005, addendum of 2026-11-10.
+  Date/Author: 2026-11-10, agent, by the criteria the plan set.
+
 ## Outcomes & Retrospective
 
 Nothing yet.
@@ -213,7 +218,7 @@ At the end of this milestone, `bun run generate` reads the game's tables and wri
 
 The project is set up first: `package.json` (scripts `generate`, `compare`, `test`, `type-check`, `lint`), `tsconfig.json` and `oxlint.config.ts` adapted from gakumas-supportcards without the parts for its page and Worker, `bun.lock`, a `.gitignore` for `node_modules`, `.cache`, `out`, and the Python working directories, and `.github/workflows/check.yml`, which runs the tests, the type check and the lint on every pull request into `develop` with read-only permissions and states at its top what it guards.
 
-The formats come next, each one file under `formats/` written with the library Milestone 0 chose and importing nothing else: `idols.v1.ts`, `support-cards.v1.ts`, `skill-cards.v1.ts`, `items.v1.ts` and `latest.v1.ts`. Each exports the schema, the type derived from it, and a `parse` function that returns the checked value or throws naming the place of the first bad value. The rules beyond shape live in the schema: no empty list of entries, each id once (each id and upgrade level once for skill cards), a pointer path that matches its format, version and release name. Until the first release is published at the public address in Milestone 3 a format may still change; from then on it never does (ADR 0005), and `formats/pinned.test.ts` pins each published file's SHA-256.
+The formats come next, each one file under `formats/` written with Valibot (L28) and importing nothing else: `idols.v1.ts`, `support-cards.v1.ts`, `skill-cards.v1.ts`, `items.v1.ts` and `latest.v1.ts`. Each exports the schema, the type derived from it, and a `parse` function that returns the checked value or throws naming the place of the first bad value. The rules beyond shape live in the schema: no empty list of entries, each id once (each id and upgrade level once for skill cards), a pointer path that matches its format, version and release name. Until the first release is published at the public address in Milestone 3 a format may still change; from then on it never does (ADR 0005), and `formats/pinned.test.ts` pins each published file's SHA-256.
 
 The builders are copied and adapted under `src/`. `src/tables.ts` is `scripts/lib/tables.ts` with the item fields the items file needs added and every table's fields typed. `src/support-cards/` holds `build.ts`, `parse-trigger.ts` and `effect-types.ts`, changed in three ways: the types come from `formats/support-cards.v1.ts`; an effect that cannot be read is reported as an `unread` entry instead of a held card; and a final `for_<word>` is always read as a scenario restriction carrying the word (L15). `src/skill-cards/build.ts` keeps `isReleased`, the label rules and the idol and ability builders, and replaces the pool rule with "every released row" (L16). `src/idols/build.ts` and `src/items/build.ts` are small and new. Nothing published today can vouch for the rows only the library publishes, so each builder's tests pin, on fixture tables, that every released row comes out exactly once and that an unreleased one does not, and `generate` prints each format's count beside its table's row count. `src/release.ts` is pure: the deterministic text of a file, its SHA-256, a release's name from a clock passed in, and the next pointer given the previous one (L18). `src/generate.ts` is the command: it loads the tables, builds the four files, checks each against its format and against the previous pointer's counts (L24), and only then writes. Where the previous pointer comes from is an argument, `--previous <directory or address>`, by default `out/site`.
 
@@ -341,6 +346,29 @@ Nothing in this plan writes to the shared bucket `tia-assets` or changes gakumas
 
 The counts the milestones' numbers come from, read 2026-11-10: tables cached 2026-11-07 — `SupportCard` 204 rows, `ProduceCard` 1,817 rows (476 ids; 141 ids drawn per idol; levels 0–3), `MemoryAbility` 585, `ProduceItem` 1,075 (521 icons), `Character` 24 (13 playable); live files — `cards.v2.json` 212 cards, 0 held, 56 distinct granted items; `skillcards.v1.json` 13 idols, 361 cards, 115 H.I.F. abilities. Expected public images: 212 card art, 521 item icons, 13 faces, and 335 + 141 × 13 = 2,168 skill card icons, about 2,900 in all.
 
+The schema library trial (Milestone 0, 2026-11-10; `prototypes/schema/`, Vite 8.3.7, target es2022, sizes of the one built script):
+
+    candidate          version   minified   gzipped   added over no check (gzipped)
+    no check           —             771       466        —
+    Valibot            1.5.0       5,769     2,182    1,716
+    Zod (zod/mini)     4.6.7      17,612     6,137    5,671
+    ArkType            2.2.9     155,677    46,720   46,254
+
+    the third idol's name is a number
+      Valibot   idols.2.name: Invalid type: Expected string but received 3
+      Zod       idols.2.name: Invalid input
+      ArkType   idols[2].name must be a string (was a number)
+    an id twice
+      Valibot   idols.2: this idol's id appears earlier in the list
+      Zod       idols.2.id: this idol's id appears earlier in the list
+      ArkType   value at [2].id must be an id not used earlier in the list
+    an extra key
+      Valibot   extra: Invalid key: Expected never but received "extra"
+      Zod       (file): Invalid input
+      ArkType   extra must be removed
+
+    bunx tsc --noEmit: exit 0 for all three (TypeScript 7.0.2, strict, noUncheckedIndexedAccess)
+
 ## Interfaces and Dependencies
 
 The public address, as bucket keys of `gkms-library`:
@@ -398,7 +426,7 @@ Functions that must exist at the end of Milestone 1:
 
 The commands: `bun run generate [--previous <directory or address>] [--allow-fewer]`; `bun run compare --site <directory or address> [--images]`; `bun run publish [--dry-run]`; `bun run daily [--dry-run] [--allow-fewer]`; `bun run sync-masters -- --dest <directory> [--only <regular expression>]`; in `images/`, `uv run extract.py --site <directory>` and `uv run upload.py --site <directory> [--dry-run]`.
 
-Dependencies: Bun 1.3.5, TypeScript 7, Oxlint with tsgolint, `js-yaml`, and the schema library Milestone 0 chooses, which each app will also need at the same major version to use a copied format file; Python 3.11 or 3.12 with uv, Pillow, UnityPy 1.10.18 or older, and GkmasObjectManager at a pinned commit, fetched and never committed (GPL-3.0; it is run, not distributed); Wrangler 4 through `bunx`; the GitHub Actions `actions/checkout`, `oven-sh/setup-bun`, `astral-sh/setup-uv` and `Taka499/nudge/actions/notify`, each pinned to a commit as in gakumas-supportcards' workflows.
+Dependencies: Bun 1.3.5, TypeScript 7, Oxlint with tsgolint, `js-yaml`, and Valibot 1 (L28), which each app will also need at the same major version to use a copied format file; Python 3.11 or 3.12 with uv, Pillow, UnityPy 1.10.18 or older, and GkmasObjectManager at a pinned commit, fetched and never committed (GPL-3.0; it is run, not distributed); Wrangler 4 through `bunx`; the GitHub Actions `actions/checkout`, `oven-sh/setup-bun`, `astral-sh/setup-uv` and `Taka499/nudge/actions/notify`, each pinned to a commit as in gakumas-supportcards' workflows.
 
 ---
 
@@ -407,3 +435,5 @@ Revision note, 2026-11-10 (#1): the milestones, Concrete Steps, Validation, Reco
 Revision note, 2026-11-10 (#1, after a Codex review of the above): L22 now says what "publishes nothing" means (the pointer does not move); the comparison no longer calls a support card only the library has unexpected, and its acceptance is one clean run while both sites are on the same update, because gakumas-supportcards can stay behind; `unread`, the conversion of memory abilities and the count L24 guards are spelled out; the builders of rows nothing else publishes get completeness tests; a wrongly published format file is never replaced. That version 1 reads the effects of support cards only, narrower than ADR 0001's wording, became job #7.
 
 Revision note, 2026-11-10 (#1, after the user's answers): job #6 A settled L20, and job #7 A settled the scope of the effect reading, recorded as an addendum to ADR 0001; the passages that said "pending" were updated.
+
+Revision note, 2026-11-09 (#2): the schema library trial ran and chose Valibot (L28); its numbers were added to Artifacts and Notes, and Milestone 1 and the dependencies now name it.

@@ -32,7 +32,7 @@ Cross-plan decisions live in `docs/adr/` (convention: `docs/adr/README.md`). Thi
 
 gkms-library ("the library") is the shared source of 学園アイドルマスター game data and images for the `tia.run` apps: gakumas-supportcards, gkms-hif-final-stats and gkms-memomemo. It generates complete, neutral data files from the game's public tables (support cards, skill cards, items, the idol list) with a structured reading of each effect, extracts the images of everything those files name from the game's servers, and publishes both at its own public address, `gkms-library.tia.run`, twice a day with no person involved. It exists because that job used to live inside gakumas-supportcards, a score table, which grew a special case for every app that asked (per `docs/adr/0001`–`0005` and `docs/plans/EXECPLAN_LIBRARY_ALONE.md`).
 
-Nothing is built yet: the repository holds its design. `docs/plans/EXECPLAN_LIBRARY_ALONE.md` is the first plan, a draft: the library publishes beside what gakumas-supportcards publishes today, with a check comparing the two, before any app moves over (its decision L6 gives the order).
+Nothing is built yet: the repository holds its design. `docs/plans/EXECPLAN_LIBRARY_ALONE.md` is the first plan: the library publishes beside what gakumas-supportcards publishes today, with a check comparing the two, before any app moves over (its decision L6 gives the order). Its four milestones are written out and none has started; each has an issue on the board.
 
 ## Architecture
 

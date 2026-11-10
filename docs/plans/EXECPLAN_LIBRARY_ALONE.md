@@ -20,7 +20,8 @@ Each milestone is one issue and one branch, merged through a pull request into `
 - [x] (2026-11-09 23:27Z) Milestones written out from a full reading of gakumas-supportcards at commit `f8be2dd` (its generator, published formats, image pipeline, update workflow and Worker), of what the two other apps load from it, and of the game's tables and the live published files (#1). Decisions L13–L27 added; issues #2–#5 filed, one per milestone; job #6 filed for the one open question.
 - [x] (2026-11-09 23:39Z) The user answered job #6 with A (plain skill card icons are published) and job #7 with A (version 1 reads the effects of support cards only); L20 is settled, and ADR 0001 has an addendum on the reading's scope.
 - [x] (2026-11-09 23:57Z) Milestone 0 (#2), second question: the schema library is Valibot (L28), chosen by the trial in `prototypes/schema/`; its numbers are in Artifacts and Notes and ADR 0005's addendum.
-- [ ] Milestone 0 (#2), first question: the two buckets created (job #10 asks the user), the address measured, the probe objects and `prototypes/` deleted.
+- [x] (2026-11-10 00:24Z) Milestone 0 (#2), first question: the user answered job #10 with A; the buckets `gkms-library` and `gkms-library-masters` exist, `gkms-library.tia.run` is connected with the CORS policy in `infra/cors.json`, and the address was measured: no Worker request, and a cache hit is no Class B operation (Surprises & Discoveries; ADR 0003's addendum). The Cache Rule for JSON was not added (L29).
+- [x] (2026-11-10 07:56Z) Milestone 0 (#2): the probe objects and `prototypes/` deleted; Milestone 0 is complete once its pull request merges.
 - [ ] Milestone 1 (#3): the data, generated and checked here, written as releases to a local directory; the comparison check passes on it.
 - [ ] Milestone 2 (#4): the images, extracted here, with public copies and private masters; the sync command.
 - [ ] Milestone 3 (#5): the daily run publishes both; the comparison check runs in it; failures reach Discord; two consecutive unattended runs succeed.
@@ -38,6 +39,21 @@ Each milestone is one issue and one branch, merged through a pull request into `
 
 - Observation: Cloudflare's documentation confirms most of what serving from a public bucket rests on and leaves two points unstated. Confirmed: R2's free tier (10 GB-month, 1 million Class A, 10 million Class B operations a month; GetObject is Class B; no egress charge); "Only requests that hit a Worker will count against your limits and your bill"; a custom domain can use Cloudflare's cache, which caches by file extension, WebP by default and JSON not, and respects the stored Cache-Control; a bucket CORS policy makes the custom domain answer cross-origin requests. Not stated: that a request to a bucket's custom domain runs no Worker, and whether a cache hit counts as a Class B operation.
   Evidence: the R2 pricing, public buckets and CORS pages, the Workers pricing and limits pages, and the default cache behavior page, read 2026-11-10.
+
+- Observation: a request to the bucket's own address runs no Worker, and one that Cloudflare's cache answers is not a Class B operation. These were the two points the documentation left unstated.
+  Evidence: on 2026-11-10 between 00:10:49Z and 00:12:50Z, 500 fetches of a WebP and 500 of a JSON file at `gkms-library.tia.run/probe/`: every WebP answered `cf-cache-status: HIT`, every JSON `DYNAMIC`. Read through Cloudflare's analytics at 00:23Z, the account's Workers had counted 37 requests in the hour, all on the existing apps (35 gakumas-supportcards, 1 gkms-memomemo, 1 tia-run-dist) and none new; the bucket had counted 559 GetObject in all, the 500 JSON fetches and the first uncached fetches around them, not the 500 cache hits.
+
+- Observation: JSON at the address is not cached by Cloudflare (`cf-cache-status: DYNAMIC`), as documented, so each fetch of a data file by a browser that does not hold it is one Class B operation. The stored Cache-Control reaches the browser unchanged (`public, max-age=300` on the probe).
+  Evidence: the same run; `curl -sI https://gkms-library.tia.run/probe/a.json`. Consequence: L29.
+
+- Observation: the address answers a missing file with 404 and `cache-control: max-age=14400`, and Cloudflare's cache remembers that 404 for three minutes: a file uploaded at 00:13:01Z still answered 404 (`HIT`) until 00:15:33Z and 200 at 00:16:03Z. A request with any query string added (`?x=1`) got 200 at once. A deleted file likewise keeps answering from the cache under its plain name.
+  Evidence: `HEAD` every 30 seconds on `probe/b.webp` after its upload. Consequences: the run asks what is stored with a query string unique to the run (L21); and a browser that asked for an image before it was uploaded may remember the miss for up to four hours, which each app's move (L6, steps 2–4) should know, since L23 lets the data name an image the game does not offer yet.
+
+- Observation: the bucket's CORS policy puts `access-control-allow-origin: *` on every answer, so a page on another origin can read the files. The address returned 403 for about forty seconds after the domain was connected, while its certificate was issued.
+  Evidence: `curl -sI -H "Origin: https://gkms-memomemo.tia.run" https://gkms-library.tia.run/probe/a.json`; checked at the level of headers, not in a browser.
+
+- Observation: the Wrangler login on the owner's machine can read the account's Workers and R2 counts through Cloudflare's GraphQL analytics, but cannot read or write the zone's Cache Rules (403).
+  Evidence: queries of `workersInvocationsAdaptive` and `r2OperationsAdaptiveGroups` answered; `GET zones/<zone>/rulesets` answered 403, 2026-11-10.
 
 - Observation: the reading of a trigger carries one site's vocabulary. A trigger restricted to one scenario ends in `for_<token>` (`for_hif`, `for_hif_memory`, `for_hajime_legend`, `for_hajime_legend_ssr`, `for_nia_master`), and gakumas-supportcards' parser replaces the token with its own scenario id (`hif`, `hajime-legend`), treating a token missing from its table as unreadable so that no score silently counts 0.
   Evidence: `SCENARIO_TOKENS` and `readScenario` in gakumas-supportcards' `scripts/lib/parse-trigger.ts`. Consequence: L15.
@@ -144,8 +160,8 @@ The decisions are numbered L1, L2, … Decisions that outlive this plan are also
   Rationale: sheets existed only for the Workers request limit (ADR 0003). ADR 0002's rule is that publication follows the data and no app asks, and a public copy lets the run ask the address what is stored (L21). The alternative, skill card art as private masters only, would have needed a list of stored masters kept in the private bucket.
   Date/Author: 2026-11-10, user (job #6, A), on the agent's recommendation.
 
-- Decision: L21 — what is already stored is asked of the public address, one `HEAD` per file the data names, several at a time; only 200 and 404 are answers. A master is uploaded before its public copy, so a public copy that answers 200 implies a stored master.
-  Rationale: this is how gakumas-supportcards plans its uploads, it needs no credentials, and Wrangler cannot list a bucket. About 2,900 requests a run are 175,000 Class B operations a month of the 10 million free. Milestone 0 measures how long a 404 is remembered after an upload.
+- Decision: L21 — what is already stored is asked of the public address, one `HEAD` per file the data names, several at a time, each with a query string unique to the run so that Cloudflare's three-minute memory of a 404 is never read (measured in Milestone 0); only 200 and 404 are answers. A master is uploaded before its public copy, so a public copy that answers 200 implies a stored master.
+  Rationale: this is how gakumas-supportcards plans its uploads, it needs no credentials, and Wrangler cannot list a bucket. About 2,900 requests a run are 175,000 Class B operations a month of the 10 million free. Each such request reaches the bucket and is one Class B operation, as counted here.
   Date/Author: 2026-11-10, agent.
 
 - Decision: L22 — a run does everything that can fail before its first write, then writes in one order: each image's master, then its public copy; the format files; the releases; the pointer last. A step that fails stops the run, and the pointer still names the last good releases. "Publishes nothing" therefore means the pointer does not move: images, format files and releases a stopped run already uploaded stay in the bucket, reachable by name but named by nothing an app follows, and the next good run reuses them.
@@ -175,6 +191,10 @@ The decisions are numbered L1, L2, … Decisions that outlive this plan are also
 - Decision: L28 — the formats are written with Valibot (1.5.0 at the trial; MIT, no dependencies).
   Rationale: by Milestone 0's rule, the smallest candidate whose message names the place of the bad value and that passes the other points. A minimal page that fetches and checks the idol list grew by 1,716 bytes gzipped with Valibot, 5,671 with Zod's small build and 46,254 with ArkType. Valibot's message for a number where a name belongs was `idols.2.name: Invalid type: Expected string but received 3`; Zod's small build ships no message texts and said `idols.2.name: Invalid input`; ArkType's was as clear as Valibot's at twenty-seven times the size. All three could hold the rule "each idol id once" inside the schema and type-checked under TypeScript 7.0.2 with this repository's strict settings. Each app copying a format file needs Valibot at major version 1. ADR 0005, addendum of 2026-11-10.
   Date/Author: 2026-11-10, agent, by the criteria the plan set.
+
+- Decision: L29 — no Cache Rule is added for the address's JSON in this plan. Data files reach the bucket on every fetch a browser's own cache does not answer.
+  Rationale: Milestone 0 was to measure with and without the rule, and ADR 0003 expected one. The rule can only be made in the Cloudflare dashboard by the owner (the Wrangler login cannot), and the measurement shows what it would save: one Class B operation per uncached fetch. Nothing reads the library during this plan, releases are immutable so a browser fetches each once, and the pointer is held for five minutes; even 10,000 page loads a day would be about 600,000 operations a month of the 10 million free. The rule is worth adding when an app's real traffic says so, at migration step 2 or later.
+  Date/Author: 2026-11-10, agent; a step removed from Milestone 0, for the user's review at its merge.
 
 ## Outcomes & Retrospective
 
@@ -206,7 +226,7 @@ Four milestones, each a branch and a pull request into `develop`, each closing i
 
 This milestone answers two questions before anything is built on their answers, and leaves the two buckets in place. Nothing it writes is kept except the buckets, the measurements recorded in this plan, and the chosen library.
 
-The first question is whether serving from a bucket's own address is free of the Workers limit, as L3 assumes. The user approves and runs, or lets the session run, the creation of the bucket `gkms-library` with the custom domain `gkms-library.tia.run`, and of the private bucket `gkms-library-masters` (a job on the board, kind `run`; Concrete Steps has the commands). The session puts one WebP image and one JSON file under the prefix `probe/`, and a CORS policy allowing `GET` and `HEAD` from any origin. It then fetches each file 500 times and has the account's numbers read before and after: the Workers request count for the day, and the bucket's Class A and Class B operation counts (the Cloudflare dashboard shows both; they lag by some minutes, so each reading waits ten). It repeats the JSON fetches after adding a Cache Rule that makes the address's JSON eligible for Cloudflare's cache. It fetches the JSON from a page on another origin (a local file served by `bunx serve` is enough) and sees the response carry `Access-Control-Allow-Origin`. And it asks for a file that does not exist, uploads it, and asks again every 30 seconds, to learn how long a 404 is remembered (L21). The results go into Surprises & Discoveries and ADR 0003. If the Workers request count rises with the fetches, the work stops there: L3 and ADR 0003 are reopened with the user, and Milestones 2 and 3 wait. If a remembered 404 lasts longer than ten minutes, L21 is revisited before Milestone 2. The probe objects are deleted at the end.
+The first question is whether serving from a bucket's own address is free of the Workers limit, as L3 assumes. The user approves and runs, or lets the session run, the creation of the bucket `gkms-library` with the custom domain `gkms-library.tia.run`, and of the private bucket `gkms-library-masters` (a job on the board, kind `run`; Concrete Steps has the commands). The session puts one WebP image and one JSON file under the prefix `probe/`, and a CORS policy allowing `GET` and `HEAD` from any origin. It then fetches each file 500 times and has the account's numbers read before and after: the Workers request count for the day, and the bucket's Class A and Class B operation counts (the Cloudflare dashboard shows both; they lag by some minutes, so each reading waits ten). It was to repeat the JSON fetches after adding a Cache Rule that makes the address's JSON eligible for Cloudflare's cache; that step was dropped (L29). It fetches the JSON from a page on another origin (a local file served by `bunx serve` is enough) and sees the response carry `Access-Control-Allow-Origin`. And it asks for a file that does not exist, uploads it, and asks again every 30 seconds, to learn how long a 404 is remembered (L21). The results go into Surprises & Discoveries and ADR 0003. If the Workers request count rises with the fetches, the work stops there: L3 and ADR 0003 are reopened with the user, and Milestones 2 and 3 wait. If a remembered 404 lasts longer than ten minutes, L21 is revisited before Milestone 2. The probe objects are deleted at the end.
 
 The second question is which schema library the formats are written in (L7). A schema library is a small TypeScript library with which one writes a description of a value that is at once its type and a function that checks an unknown value against it. In a scratch directory `prototypes/schema/` the session writes the `idols` format (Interfaces and Dependencies) three times, with Valibot, with Zod's small build (`zod/mini`), and with ArkType, after reading each one's current documentation rather than relying on memory. For each it records: the bytes a minimal page that imports the format and checks a fetched file adds when built with Vite, minified and gzipped; the message for a file in which the third idol's `name` is a number, which must say where the bad value is; whether the rule "each idol id once" can be written inside the schema; whether it type-checks under TypeScript 7 with this repository's strict settings; and its licence and dependencies. The smallest candidate whose message names the place and that passes the other points is chosen; the choice and the numbers are recorded as a decision here and in ADR 0005, and `prototypes/` is deleted in the same pull request.
 
@@ -273,13 +293,24 @@ Milestone 0, the buckets (after the user's approval; `<zone id>` is the id of th
     bunx wrangler r2 bucket cors set gkms-library --file infra/cors.json
     bunx wrangler r2 bucket cors list gkms-library
 
-`infra/cors.json` allows `GET` and `HEAD` from any origin; its exact shape is the one `wrangler r2 bucket cors set --help` documents at that time, and the file is committed. Putting and fetching the probe:
+`infra/cors.json` allows `GET` and `HEAD` from any origin and is committed. As run on 2026-11-10 (Wrangler 4.159.0; the zone id of `tia.run` is `40b326f4c0eddf72436b00e523e8e2a7`, and `--force` skips the confirmation):
+
+    $ bunx wrangler r2 bucket domain add gkms-library --domain gkms-library.tia.run --zone-id 40b326f4c0eddf72436b00e523e8e2a7 --min-tls 1.2 --force
+    ✨ Custom domain 'gkms-library.tia.run' connected successfully.
+    $ bunx wrangler r2 bucket cors list gkms-library
+    allowed_origins:  *
+    allowed_methods:  GET, HEAD
+    max_age_seconds:  86400
+    $ bunx wrangler r2 bucket dev-url get gkms-library-masters
+    Public access via the r2.dev URL is disabled.
+
+The masters bucket has no custom domain and no public address. Putting and fetching the probe:
 
     bunx wrangler r2 object put gkms-library/probe/a.webp --file <any small webp> --content-type image/webp --cache-control "public, max-age=31536000, immutable" --remote
     bunx wrangler r2 object put gkms-library/probe/a.json --file <any small json> --content-type application/json --cache-control "public, max-age=300" --remote
     for i in $(seq 500); do curl -s -o /dev/null -w "%{http_code} %header{cf-cache-status}\n" https://gkms-library.tia.run/probe/a.webp; done | sort | uniq -c
 
-The last line prints how many answers were 200 and how many came from Cloudflare's cache (`HIT`) or from the bucket (`MISS`, `DYNAMIC`). The same loop is run for `a.json`, before and after the Cache Rule.
+The last line prints how many answers were 200 and how many came from Cloudflare's cache (`HIT`) or from the bucket (`MISS`, `DYNAMIC`). As run: `500 200 HIT` for `a.webp` and `500 200 DYNAMIC` for `a.json`. No Cache Rule was added (L29).
 
 Milestone 1:
 
@@ -330,7 +361,7 @@ Two consecutive scheduled runs succeed with no person involved, and the Monday m
 
 The comparison check reports no unexpected difference. It checks that: the level limits are equal; every support card id gakumas-supportcards lists is in the library's file, and each such card is equal once the library's scenario tokens are mapped as gakumas-supportcards maps them (`hif` and `hif_memory` to `hif`, `hajime_legend` and `hajime_legend_ssr` to `hajime-legend`, and `nia_master` to `nia_master`, underscore kept, since that site has no id of its own for it); every reason in gakumas-supportcards' `held` list is either one of the library's `unread` entries or a scoring reason (it says `no route profile number`), and every `unread` entry appears there; the idol lists are equal in ids, names and order; every skill card of gakumas-supportcards' file, by id and upgrade level, is in the library's and equal in name, plan, rarity, type, order, guide labels, art and customization; every H.I.F. ability there is in the library's with the same card and the group `produce_group-003`; every item a support card grants is in the items file with the same name and icon; and, with `--images`, every card art and item icon gakumas-supportcards' site serves for its data is served under the same name by the library. The expected differences it names and counts are the support cards, skill cards and abilities only the library has, the absence of `held`, and the scenario tokens. The two sites read the tables at different times, and gakumas-supportcards stays an update behind when one of its gates refuses it, so a card that differs can be such a lag and not a loss: the report lists each unexpected difference for a person to judge, and the plan's acceptance needs one run, made while both sites are on the same update, that reports none.
 
-The account's Workers request count does not rise with requests to the address (measured in Milestone 0).
+The account's Workers request count does not rise with requests to the address (measured in Milestone 0: 1,000 fetches, no Worker request).
 
 No app has changed: no commit in gakumas-supportcards, gkms-hif-final-stats or gkms-memomemo belongs to this plan, and nothing was written to the bucket `tia-assets`.
 
@@ -437,3 +468,5 @@ Revision note, 2026-11-10 (#1, after a Codex review of the above): L22 now says 
 Revision note, 2026-11-10 (#1, after the user's answers): job #6 A settled L20, and job #7 A settled the scope of the effect reading, recorded as an addendum to ADR 0001; the passages that said "pending" were updated.
 
 Revision note, 2026-11-09 (#2): the schema library trial ran and chose Valibot (L28); its numbers were added to Artifacts and Notes, and Milestone 1 and the dependencies now name it.
+
+Revision note, 2026-11-10 (#2, the address measured): the buckets and the domain exist; five observations record what was measured; L21 gained the per-run query string, and L29 drops the Cache Rule from this plan, which Milestone 0's text and Concrete Steps now say.

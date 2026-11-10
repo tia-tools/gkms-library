@@ -41,7 +41,7 @@ Each milestone is one issue and one branch, merged through a pull request into `
   Evidence: the R2 pricing, public buckets and CORS pages, the Workers pricing and limits pages, and the default cache behavior page, read 2026-11-10.
 
 - Observation: a request to the bucket's own address runs no Worker, and one that Cloudflare's cache answers is not a Class B operation. These were the two points the documentation left unstated.
-  Evidence: on 2026-11-10 between 00:10:49Z and 00:12:50Z, 500 fetches of a WebP and 500 of a JSON file at `gkms-library.tia.run/probe/`: every WebP answered `cf-cache-status: HIT`, every JSON `DYNAMIC`. Read through Cloudflare's analytics at 00:23Z, the account's Workers had counted 37 requests in the hour, all on the existing apps (35 gakumas-supportcards, 1 gkms-memomemo, 1 tia-run-dist) and none new; the bucket had counted 559 GetObject in all, the 500 JSON fetches and the first uncached fetches around them, not the 500 cache hits.
+  Evidence: on 2026-11-10 between 00:10:49Z and 00:12:50Z, 500 fetches of a WebP and 500 of a JSON file at `gkms-library.tia.run/probe/`: every WebP answered `cf-cache-status: HIT`, every JSON `DYNAMIC`. Read through Cloudflare's analytics at 00:23Z, the account's Workers had counted 37 requests in the hour, all on the existing apps (35 gakumas-supportcards, 1 gkms-memomemo, 1 tia-run-dist) and none new; the bucket had counted 559 GetObject in all: the 500 JSON fetches and some 60 others, not all of which the session's own log accounts for, against about 1,060 had the cache hits counted. A second, cleaner run settled it: with the bucket's GetObject count read as 646 at 07:58:57Z, one image primed (one `MISS`), then fetched 1,000 times between 07:58:59Z and 08:00:07Z, all `HIT`, the count read 13 minutes later was 647, and HeadObject stayed at 2.
 
 - Observation: JSON at the address is not cached by Cloudflare (`cf-cache-status: DYNAMIC`), as documented, so each fetch of a data file by a browser that does not hold it is one Class B operation. The stored Cache-Control reaches the browser unchanged (`public, max-age=300` on the probe).
   Evidence: the same run; `curl -sI https://gkms-library.tia.run/probe/a.json`. Consequence: L29.
@@ -89,7 +89,7 @@ The decisions are numbered L1, L2, … Decisions that outlive this plan are also
   Date/Author: 2026-11-10, user.
 
 - Decision: L3 — files are served from a public R2 bucket's own address (`gkms-library.tia.run`), with no Worker; apps load data and images directly.
-  Rationale: such requests do not count toward the Workers Free daily limit, so single images cost nothing and no sheets are needed. Checked against Cloudflare's documentation at the user's request; two points remain to measure (Surprises & Discoveries; Milestone 0). ADR 0003.
+  Rationale: such requests do not count toward the Workers Free daily limit, so single images cost nothing and no sheets are needed. Checked against Cloudflare's documentation at the user's request; two points remained to measure, and Milestone 0 measured both as hoped (Surprises & Discoveries; ADR 0003's addendum). ADR 0003.
   Date/Author: 2026-11-10, user.
 
 - Decision: L4 — only images of things named in the published data are published, at display sizes; lossless masters are private, in a second bucket.
@@ -105,7 +105,7 @@ The decisions are numbered L1, L2, … Decisions that outlive this plan are also
   Date/Author: 2026-11-10, user.
 
 - Decision: L7 — each format is one schema-as-code TypeScript file, both the types and the check, never changed once published, copied verbatim by each app with a pinned-hash test; the library checks every release against it. Terms: a format is the shape of a file; a release is one update's content in a format.
-  Rationale: it is the only option that removes the apps' hand-written readers, where a perfect copy of the types can still be checked wrongly; the never-changes rule removes the dangerous drift, a shape changed without a new number. Which schema library: Milestone 0. ADR 0005.
+  Rationale: it is the only option that removes the apps' hand-written readers, where a perfect copy of the types can still be checked wrongly; the never-changes rule removes the dangerous drift, a shape changed without a new number. The schema library is Valibot, chosen in Milestone 0 (L28). ADR 0005.
   Date/Author: 2026-11-10, user.
 
 - Decision: L8 — the data is complete and neutral: every released skill card with the facts an app needs to filter (its kind; every scenario's memory abilities), not one app's pool. gkms-memomemo takes over its pool rule in migration step 2.
@@ -149,7 +149,7 @@ The decisions are numbered L1, L2, … Decisions that outlive this plan are also
   Date/Author: 2026-11-10, agent.
 
 - Decision: L18 — a release is named `<UTC time as YYYYMMDDTHHMM>Z-<first 8 hex digits of its SHA-256>.json` and stored at `data/<format>/v<N>/`. The pointer `data/latest.v1.json` names, for each format and version, its newest release with its full SHA-256. A run whose content for a format hashes the same as the release the pointer names writes no release for it; the pointer is rewritten only when it would differ. Releases, format files and images are stored `public, max-age=31536000, immutable`; the pointer `public, max-age=300`.
-  Rationale: the time makes a listing readable in order and the hash makes the name say what the file holds; skipping unchanged content keeps two runs a day from filling the bucket; five minutes lets Cloudflare's cache carry the pointer's load while an update still reaches apps quickly. R2 returns the Cache-Control stored with an object on every download, so it must match how the object may change: the pointer is the one object rewritten under its name, hence the one short-lived value.
+  Rationale: the time makes a listing readable in order and the hash makes the name say what the file holds; skipping unchanged content keeps two runs a day from filling the bucket; five minutes lets a browser keep the pointer between page loads while an update still reaches apps quickly; Cloudflare's own cache does not hold JSON at this address without a Cache Rule, which this plan does not add (L29), so every fetch a browser's cache does not answer reaches the bucket. R2 returns the Cache-Control stored with an object on every download, so it must match how the object may change: the pointer is the one object rewritten under its name, hence the one short-lived value.
   Date/Author: 2026-11-10, agent.
 
 - Decision: L19 — public images keep today's sizes, prefixes and file names: card art 192 × 108 at `img/w192/img_general_<assetId>_full.webp`, item icons 48 × 48 at `img/w48/<assetId>.webp`, and at `img/w112/`, 112 × 112 with transparency, each idol's face (`img_sd_<idol id>_face-00.webp`) and each skill card's icon (job #6, A). Faces are published for the idols the idol list names, the 13 playable ones. A further size is a new prefix, never a rename.
@@ -470,3 +470,5 @@ Revision note, 2026-11-10 (#1, after the user's answers): job #6 A settled L20, 
 Revision note, 2026-11-09 (#2): the schema library trial ran and chose Valibot (L28); its numbers were added to Artifacts and Notes, and Milestone 1 and the dependencies now name it.
 
 Revision note, 2026-11-10 (#2, the address measured): the buckets and the domain exist; five observations record what was measured; L21 gained the per-run query string, and L29 drops the Cache Rule from this plan, which Milestone 0's text and Concrete Steps now say.
+
+Revision note, 2026-11-10 (#2, after a Codex review): the claim that a cache hit is no Class B operation rested on a count with about 60 reads not all accounted for, so it was measured again with a baseline and a final reading (646 to 647 across 1,000 cache hits); L18's rationale now says the pointer's five minutes are a browser's, not Cloudflare's cache; L3 and L7 no longer speak of Milestone 0's two results as future.

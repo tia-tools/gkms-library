@@ -22,7 +22,7 @@ Each milestone is one issue and one branch, merged through a pull request into `
 - [x] (2026-11-09 23:57Z) Milestone 0 (#2), second question: the schema library is Valibot (L28), chosen by the trial in `prototypes/schema/`; its numbers are in Artifacts and Notes and ADR 0005's addendum.
 - [x] (2026-11-10 00:24Z) Milestone 0 (#2), first question: the user answered job #10 with A; the buckets `gkms-library` and `gkms-library-masters` exist, `gkms-library.tia.run` is connected with the CORS policy in `infra/cors.json`, and the address was measured: no Worker request, and a cache hit is no Class B operation (Surprises & Discoveries; ADR 0003's addendum). The Cache Rule for JSON was not added (L29).
 - [x] (2026-11-10 07:56Z) Milestone 0 (#2): the probe objects and `prototypes/` deleted; Milestone 0 is complete once its pull request merges.
-- [ ] Milestone 1 (#3): the data, generated and checked here, written as releases to a local directory; the comparison check passes on it.
+- [x] (2026-11-11 23:01Z) Milestone 1 (#3): `bun run generate` writes the four data files as releases with the pointer and the format files into `out/site/`; `bun run compare --site out/site` reports no unexpected difference from gakumas-supportcards' live files; 122 tests, the type check and the lint pass, and each new rule's test was seen to fail with the rule broken (33 mutations, all caught). Complete once its pull request merges.
 - [ ] Milestone 2 (#4): the images, extracted here, with public copies and private masters; the sync command.
 - [ ] Milestone 3 (#5): the daily run publishes both; the comparison check runs in it; failures reach Discord; two consecutive unattended runs succeed.
 
@@ -60,6 +60,15 @@ Each milestone is one issue and one branch, merged through a pull request into `
 
 - Observation: the game's tables are far larger than what is published today. `ProduceCard` has 1,817 rows for 476 card ids at upgrade levels 0 to 3 (the published pool is 361 rows at levels 0 and 1); its `searchTag` is empty, `starter` or `idol-unique`; 236 rows name an origin support card and 676 an origin idol card. `MemoryAbility` has 585 rows, 115 of them of the H.I.F. scenario group `produce_group-003`, 288 of `produce_group-001`, 108 of `produce_group-002` and 74 of no group. `ProduceItem` has 1,075 rows sharing 521 icons, of which support cards grant 56. Every row of all three is released today. The step labels of every customization, at every level, can be built with the existing rule (2,661 labels, no error).
   Evidence: a probe over the tables cached in gakumas-supportcards on 2026-11-07 (`.cache/gakumasu-diff`), and the live files on 2026-11-10: `cards.v2.json` 1,587,399 bytes with 212 cards and 0 held, `skillcards.v1.json` 192,178 bytes with 13 idols, 361 cards and 115 H.I.F. abilities.
+
+- Observation: the table counts first written into this plan were partly four weeks stale. The copy of the tables cached in gakumas-supportcards was of two ages: the skill card tables fetched on 2026-11-08, the support card and item tables on 2026-09-20. Generating from that copy stopped at once (`MemoryAbility …-106-001: missing ProduceSkill`), since an H.I.F. ability from November named a skill September's table did not have. Fetched fresh on 2026-11-10, the tables hold 212 support cards (not 204), 1,104 items (not 1,075) and 25 characters (not 24); the skill card counts were right.
+  Evidence: the file dates in gakumas-supportcards' `.cache/gakumasu-diff/`; `bun run generate` on freshly fetched tables (Concrete Steps). Consequence: the unattended run always starts with no cache, as a runner does; a person generating locally deletes `.cache/` first when the numbers matter.
+
+- Observation: no support card's trigger carries a scenario restriction today, so the comparison's mapping of scenario tokens (L15) is exercised by its tests only, not by real data.
+  Evidence: no `"scenario"` key in the generated `support-cards` release nor in gakumas-supportcards' live `cards.v2.json`, 2026-11-11.
+
+- Observation: a format's check returns its value with the keys in the schema's order, not the order they were written in, so two equal cards can differ as text. The files are therefore written from the builders' own values and only checked by the format, and the comparison compares values with their keys sorted.
+  Evidence: `canonical` in `src/compare/compare.ts` and its test; Valibot 1.5.0.
 
 - Observation: the icons of the skill cards left out of today's pool have names the image pipeline does not recognise. Its pattern accepts the kinds `act`, `men` and `ido`; the complete table also has `sup` (236 rows, the cards support cards' events give) and `acc` (1 row).
   Evidence: `SKILLCARD_OBJECT_NAME` in gakumas-supportcards' `scripts/images/thumbnail.py`, against the `assetId` values of `ProduceCard`. Consequence: Milestone 2 widens the pattern, and stops when the data names an image no pattern matches.
@@ -196,9 +205,23 @@ The decisions are numbered L1, L2, … Decisions that outlive this plan are also
   Rationale: Milestone 0 was to measure with and without the rule, and ADR 0003 expected one. The rule can only be made in the Cloudflare dashboard by the owner (the Wrangler login cannot), and the measurement shows what it would save: one Class B operation per uncached fetch. Nothing reads the library during this plan, releases are immutable so a browser fetches each once, and the pointer is held for five minutes; even 10,000 page loads a day would be about 600,000 operations a month of the 10 million free. The rule is worth adding when an app's real traffic says so, at migration step 2 or later.
   Date/Author: 2026-11-10, agent; a step removed from Milestone 0, for the user's review at its merge.
 
+- Decision: L30 — Bun is 1.4.3, not the 1.3.5 L13 named: it is the version on the owner's machine, where every check of Milestone 1 ran, and `check.yml` pins the same.
+  Rationale: a pull request should be checked by the version the work was verified with; gakumas-supportcards' pin is its own.
+  Date/Author: 2026-11-11, agent.
+
+- Decision: L31 — support cards and items are filtered by their release time (`viewStartTime`), like skill cards. gakumas-supportcards publishes every support card row without that check; every row is released today, so the two agree.
+  Rationale: ADR 0001 says every released entry, and ADR 0002 that nothing unreleased leaks; should the game ever list a support card early, the comparison will report it as missing here, which a person can then read correctly.
+  Date/Author: 2026-11-11, agent.
+
+- Decision: L32 — `bun run compare` takes `--theirs <directory or address>`, by default the live site.
+  Rationale: the other site is a dependency of the check, passed in like the library's side, so the check can be pointed at a saved copy of those files.
+  Date/Author: 2026-11-11, agent.
+
 ## Outcomes & Retrospective
 
-Nothing yet.
+Milestone 0 (2026-11-10): both of its questions were answered as the design hoped, the address serving without a Worker and cache hits costing no read, and Valibot was chosen at 1.7 KB. One step was dropped, the Cache Rule (L29). A Codex review was what made the cache-hit proof clean: the first measurement had reads it could not account for.
+
+Milestone 1 (2026-11-11): the generator, the formats and the comparison exist, and the comparison passes on real data: every support card, skill card, idol and H.I.F. ability gakumas-supportcards publishes is in the library's files and equal, with 1,456 skill card rows and 470 memory abilities only the library has. The copied code needed three real changes (unread effects, scenario tokens, every released row); the rest is new and small. What remains for the plan's purpose: the images (Milestone 2) and publication (Milestone 3).
 
 ## Context and Orientation
 
@@ -240,7 +263,7 @@ The project is set up first: `package.json` (scripts `generate`, `compare`, `tes
 
 The formats come next, each one file under `formats/` written with Valibot (L28) and importing nothing else: `idols.v1.ts`, `support-cards.v1.ts`, `skill-cards.v1.ts`, `items.v1.ts` and `latest.v1.ts`. Each exports the schema, the type derived from it, and a `parse` function that returns the checked value or throws naming the place of the first bad value. The rules beyond shape live in the schema: no empty list of entries, each id once (each id and upgrade level once for skill cards), a pointer path that matches its format, version and release name. Until the first release is published at the public address in Milestone 3 a format may still change; from then on it never does (ADR 0005), and `formats/pinned.test.ts` pins each published file's SHA-256.
 
-The builders are copied and adapted under `src/`. `src/tables.ts` is `scripts/lib/tables.ts` with the item fields the items file needs added and every table's fields typed. `src/support-cards/` holds `build.ts`, `parse-trigger.ts` and `effect-types.ts`, changed in three ways: the types come from `formats/support-cards.v1.ts`; an effect that cannot be read is reported as an `unread` entry instead of a held card; and a final `for_<word>` is always read as a scenario restriction carrying the word (L15). `src/skill-cards/build.ts` keeps `isReleased`, the label rules and the idol and ability builders, and replaces the pool rule with "every released row" (L16). `src/idols/build.ts` and `src/items/build.ts` are small and new. Nothing published today can vouch for the rows only the library publishes, so each builder's tests pin, on fixture tables, that every released row comes out exactly once and that an unreleased one does not, and `generate` prints each format's count beside its table's row count. `src/release.ts` is pure: the deterministic text of a file, its SHA-256, a release's name from a clock passed in, and the next pointer given the previous one (L18). `src/generate.ts` is the command: it loads the tables, builds the four files, checks each against its format and against the previous pointer's counts (L24), and only then writes. Where the previous pointer comes from is an argument, `--previous <directory or address>`, by default `out/site`.
+The builders are copied and adapted under `src/`. `src/tables.ts` is `scripts/lib/tables.ts` with the item fields the items file needs added and every table's declared fields typed (a field holding a list of nested rows is checked to be a list, and a field the game may leave out is not declared). `src/support-cards/` holds `build.ts`, `parse-trigger.ts` and `effect-types.ts`, changed in three ways: the types come from `formats/support-cards.v1.ts`; an effect that cannot be read is reported as an `unread` entry instead of a held card; and a final `for_<word>` is always read as a scenario restriction carrying the word (L15). `src/skill-cards/build.ts` keeps `isReleased`, the label rules and the idol and ability builders, and replaces the pool rule with "every released row" (L16). `src/idols/build.ts` and `src/items/build.ts` are small and new. Nothing published today can vouch for the rows only the library publishes, so each builder's tests pin, on fixture tables, that every released row comes out exactly once and that an unreleased one does not, and `generate` prints each format's count beside its table's row count. `src/release.ts` is pure: the deterministic text of a file, its SHA-256, a release's name from a clock passed in, and the next pointer given the previous one (L18). `src/build-all.ts` builds the four files and checks each against its format, purely; `src/generate.ts` is the command: it loads the tables, calls that, checks the counts against the previous pointer's (L24), and only then writes. `src/site.ts` reads a published file from a directory or an address, for this command and the comparison. Where the previous pointer comes from is an argument, `--previous <directory or address>`, by default `out/site`.
 
 `src/compare/` is the comparison check (L26): `compare.ts` is pure, taking the two sites' parsed files and returning the differences, each either expected, with a name and a count, or unexpected; `src/compare/main.ts` fetches `https://gakumas-supportcards.tia.run/data/cards.v2.json` and `skillcards.v1.json` and reads the library's side from `--site`. What it compares is in Validation and Acceptance.
 
@@ -320,15 +343,28 @@ Milestone 1:
     bun run compare --site out/site
     bun test && bun run type-check && bun run lint
 
-The first `generate` is expected to print, with counts near these (the tables of 2026-11-07 and the live files of 2026-11-10):
+As run on 2026-11-11, with `.cache/` deleted first so the tables are fetched:
 
-    idols v1: 13 idols — new release 20261110T0300Z-xxxxxxxx
-    support-cards v1: 212 cards, 0 unread — new release …
-    skill-cards v1: 1817 cards (476 ids), 585 abilities — new release …
-    items v1: 1075 items — new release …
+    $ bun run generate
+    idols v1: 13 idols of 25 rows — new release 20261111T2300Z-001d92d5
+    items v1: 1104 items of 1104 rows — new release 20261111T2300Z-f87c4c94
+    skill-cards v1: 1817 cards (476 ids) of 1817 rows, 585 abilities of 585 rows — new release 20261111T2300Z-0259401d
+    support-cards v1: 212 cards of 212 rows, 0 unread — new release 20261111T2300Z-0513c9bc
     wrote out/site/data/latest.v1.json
+    $ bun run generate
+    idols v1: 13 idols of 25 rows — unchanged
+    items v1: 1104 items of 1104 rows — unchanged
+    skill-cards v1: 1817 cards (476 ids) of 1817 rows, 585 abilities of 585 rows — unchanged
+    support-cards v1: 212 cards of 212 rows, 0 unread — unchanged
+    pointer unchanged
+    $ bun run compare --site out/site
+    expected   1456 × skill cards only here (that site publishes one app's pool)
+    expected   470 × memory abilities only here (that site publishes H.I.F.'s, of its pool)
+    no unexpected difference
+    $ bun test
+    122 pass, 0 fail
 
-and the second, `unchanged` for each format and `pointer unchanged`. `compare` is expected to end with `no unexpected difference` after listing the expected ones with their counts, and to exit 0.
+An expected difference is printed only when its count is not zero. With a copy of the tables in which one support card's name was changed (`GAKUMASU_DIFF_CACHE=<copy> bun run generate`), the run printed `unchanged` for three formats and `new release` for `support-cards` only; with one idol made unplayable it printed `idols v1 would list 12 entries, fewer than the 13 of …` and `Nothing written.`, and exited 1. The releases are 500 bytes (idols), 209 KB (items), 987 KB (skill cards) and 1,587 KB (support cards).
 
 Milestone 2, in `images/`:
 
@@ -375,7 +411,7 @@ Nothing in this plan writes to the shared bucket `tia-assets` or changes gakumas
 
 ## Artifacts and Notes
 
-The counts the milestones' numbers come from, read 2026-11-10: tables cached 2026-11-07 — `SupportCard` 204 rows, `ProduceCard` 1,817 rows (476 ids; 141 ids drawn per idol; levels 0–3), `MemoryAbility` 585, `ProduceItem` 1,075 (521 icons), `Character` 24 (13 playable); live files — `cards.v2.json` 212 cards, 0 held, 56 distinct granted items; `skillcards.v1.json` 13 idols, 361 cards, 115 H.I.F. abilities. Expected public images: 212 card art, 521 item icons, 13 faces, and 335 + 141 × 13 = 2,168 skill card icons, about 2,900 in all.
+The counts the milestones' numbers come from. Tables fetched 2026-11-10: `SupportCard` 212 rows, `ProduceCard` 1,817 rows (476 ids; 141 ids drawn per idol; levels 0–3), `MemoryAbility` 585, `ProduceItem` 1,104, `Character` 25 (13 playable). Live files of gakumas-supportcards, 2026-11-10: `cards.v2.json` 212 cards, 0 held, 56 distinct granted items; `skillcards.v1.json` 13 idols, 361 cards, 115 H.I.F. abilities. Expected public images: 212 card art, 13 faces, 335 + 141 × 13 = 2,168 skill card icons, and an icon per distinct item `assetId`, 521 in the tables of 2026-09-20 and to be counted again in Milestone 2; about 2,900 in all.
 
 The schema library trial (Milestone 0, 2026-11-10; `prototypes/schema/`, Vite 8.3.7, target es2022, sizes of the one built script):
 
@@ -449,15 +485,16 @@ Functions that must exist at the end of Milestone 1:
     export function fileText(file: unknown): string                               // deterministic JSON
     export function sha256Hex(text: string): string
     export function releaseName(now: Date, sha256: string): string                // "20261110T0300Z-1a2b3c4d"
-    export function nextPointer(previous: Latest | null, built: readonly Built[], now: Date): { pointer: Latest; fresh: readonly Built[] }
+    export function nextPointer(previous: Latest | null, built: readonly Built[], now: Date): { pointer: Latest; fresh: Fresh[] }
+    export function fewerEntries(previous: Latest | null, built: readonly Built[]): string[]            // empty when none would shrink
 
     // src/compare/compare.ts
-    export function compare(theirs: TheirFiles, ours: OurFiles): readonly Difference[]
+    export function compare(theirs: Theirs, ours: Ours): Difference[]
     export interface Difference { kind: "expected" | "unexpected"; name: string; count: number; examples: readonly string[] }
 
-The commands: `bun run generate [--previous <directory or address>] [--allow-fewer]`; `bun run compare --site <directory or address> [--images]`; `bun run publish [--dry-run]`; `bun run daily [--dry-run] [--allow-fewer]`; `bun run sync-masters -- --dest <directory> [--only <regular expression>]`; in `images/`, `uv run extract.py --site <directory>` and `uv run upload.py --site <directory> [--dry-run]`.
+The commands: `bun run generate [--previous <directory or address>] [--allow-fewer]`; `bun run compare --site <directory or address> [--theirs <directory or address>] [--images]` (`--images` from Milestone 3); `bun run publish [--dry-run]`; `bun run daily [--dry-run] [--allow-fewer]`; `bun run sync-masters -- --dest <directory> [--only <regular expression>]`; in `images/`, `uv run extract.py --site <directory>` and `uv run upload.py --site <directory> [--dry-run]`.
 
-Dependencies: Bun 1.3.5, TypeScript 7, Oxlint with tsgolint, `js-yaml`, and Valibot 1 (L28), which each app will also need at the same major version to use a copied format file; Python 3.11 or 3.12 with uv, Pillow, UnityPy 1.10.18 or older, and GkmasObjectManager at a pinned commit, fetched and never committed (GPL-3.0; it is run, not distributed); Wrangler 4 through `bunx`; the GitHub Actions `actions/checkout`, `oven-sh/setup-bun`, `astral-sh/setup-uv` and `Taka499/nudge/actions/notify`, each pinned to a commit as in gakumas-supportcards' workflows.
+Dependencies: Bun 1.4.3 (L30), TypeScript 7, Oxlint with tsgolint, `js-yaml`, and Valibot 1 (L28), which each app will also need at the same major version to use a copied format file; Python 3.11 or 3.12 with uv, Pillow, UnityPy 1.10.18 or older, and GkmasObjectManager at a pinned commit, fetched and never committed (GPL-3.0; it is run, not distributed); Wrangler 4 through `bunx`; the GitHub Actions `actions/checkout`, `oven-sh/setup-bun`, `astral-sh/setup-uv` and `Taka499/nudge/actions/notify`, each pinned to a commit as in gakumas-supportcards' workflows.
 
 ---
 
@@ -472,3 +509,5 @@ Revision note, 2026-11-09 (#2): the schema library trial ran and chose Valibot (
 Revision note, 2026-11-10 (#2, the address measured): the buckets and the domain exist; five observations record what was measured; L21 gained the per-run query string, and L29 drops the Cache Rule from this plan, which Milestone 0's text and Concrete Steps now say.
 
 Revision note, 2026-11-10 (#2, after a Codex review): the claim that a cache hit is no Class B operation rested on a count with about 60 reads not all accounted for, so it was measured again with a baseline and a final reading (646 to 647 across 1,000 cache hits); L18's rationale now says the pointer's five minutes are a browser's, not Cloudflare's cache; L3 and L7 no longer speak of Milestone 0's two results as future.
+
+Revision note, 2026-11-11 (#3, Milestone 1 done): Progress, Concrete Steps (the real transcript) and Outcomes were updated; three observations and decisions L30–L32 were added; the table counts in Artifacts and Notes were corrected from freshly fetched tables, the first ones having come from a cache of two ages.

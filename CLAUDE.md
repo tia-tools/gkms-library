@@ -32,19 +32,36 @@ Cross-plan decisions live in `docs/adr/` (convention: `docs/adr/README.md`). Thi
 
 gkms-library ("the library") is the shared source of 学園アイドルマスター game data and images for the `tia.run` apps: gakumas-supportcards, gkms-hif-final-stats and gkms-memomemo. It generates complete, neutral data files from the game's public tables (support cards, skill cards, items, the idol list) with a structured reading of each effect, extracts the images of everything those files name from the game's servers, and publishes both at its own public address, `gkms-library.tia.run`, twice a day with no person involved. It exists because that job used to live inside gakumas-supportcards, a score table, which grew a special case for every app that asked (per `docs/adr/0001`–`0005` and `docs/plans/EXECPLAN_LIBRARY_ALONE.md`).
 
-Nothing is built yet: the repository holds its design. `docs/plans/EXECPLAN_LIBRARY_ALONE.md` is the first plan: the library publishes beside what gakumas-supportcards publishes today, with a check comparing the two, before any app moves over (its decision L6 gives the order). Its Milestone 0 is done: the buckets `gkms-library` (public, at `gkms-library.tia.run`) and `gkms-library-masters` (private) exist and hold nothing yet. Milestones 1 to 3 have not started; each has an issue on the board.
+`docs/plans/EXECPLAN_LIBRARY_ALONE.md` is the first plan: the library publishes beside what gakumas-supportcards publishes today, with a check comparing the two, before any app moves over (its decision L6 gives the order). Its Milestones 0 and 1 are done: the buckets `gkms-library` (public, at `gkms-library.tia.run`) and `gkms-library-masters` (private) exist and hold nothing yet, and the data is generated and checked here but written to a local directory only. Milestone 2 (the images) and Milestone 3 (the unattended run that publishes) have not started; each has an issue on the board.
 
 ## Architecture
 
-<!-- Describe the high-level structure: key directories, how components relate, data flow. Name the main entry points. -->
+Per `docs/plans/EXECPLAN_LIBRARY_ALONE.md` § Plan of Work and § Interfaces and Dependencies.
+
+- `formats/` holds one Valibot schema file per format and version (`idols.v1.ts`, `items.v1.ts`, `skill-cards.v1.ts`, `support-cards.v1.ts`, and `latest.v1.ts` for the pointer). Each is the format's types and its check, imports nothing but Valibot, and is published beside the data. None is published yet, so they may still change; once published, never (per `docs/adr/0005`).
+- `src/` is the data side, TypeScript run by Bun. `tables.ts` loads the game's tables (cached in `.cache/gakumasu-diff/`). `support-cards/`, `skill-cards/`, `idols/` and `items/` each build one file's entries, purely. `build-all.ts` builds the four files and checks each against its format. `release.ts` names releases and computes the pointer. `generate.ts` is the command that writes them. `compare/` is the check against what gakumas-supportcards publishes, to be deleted when that site stops publishing.
+- `out/site/` (not committed) mirrors the public bucket: `data/latest.v1.json`, `data/<format>/v<N>/<release>.json`, `formats/`.
+- `infra/cors.json` is the public bucket's CORS policy.
+
+The builders are adapted from gakumas-supportcards at commit `f8be2dd`; what changed is in the plan's decisions L15–L17.
 
 ## Setup and Development
 
-<!-- How to install dependencies, configure the environment, and run the project locally. Include exact commands. -->
+Bun 1.4.3. From the repository root:
+
+    bun install
+    bun run generate                    # the four data files, as releases with a pointer, into out/site/
+    bun run compare --site out/site     # against gakumas-supportcards' live files; exits 1 on an unexpected difference
+
+`generate` fetches the game's tables on first use and caches them in `.cache/gakumasu-diff/`; delete that directory to fetch them again. `GAKUMASU_DIFF_CACHE=<directory>` points it at another copy.
 
 ## Build and Test
 
-<!-- List the commands to build, test, lint, and format. Show expected output for a clean run. -->
+    bun test                # hermetic: no network
+    bun run type-check
+    bun run lint            # Oxlint; a clean run prints nothing, so read its exit status
+
+`.github/workflows/check.yml` runs the three on every pull request into `develop`. A new test is first seen to fail with its rule broken.
 
 ## Code Style
 

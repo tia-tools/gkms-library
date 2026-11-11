@@ -1,0 +1,75 @@
+/**
+ * Generates the data files from the game's tables and writes them as releases, with the pointer
+ * and the format files, into a directory that mirrors the public bucket.
+ *
+ * Usage: bun run generate [--out out/site] [--previous <directory or address>] [--allow-fewer]
+ *
+ * `--previous` is the site whose pointer says what is already released: content that hashes as the
+ * release it names gets no new release, and a format that would list fewer entries than that
+ * release stops the run unless `--allow-fewer` is given (a real removal in the game). It defaults
+ * to `--out`. Everything is built and checked before the first write, so a run that fails writes
+ * nothing (docs/plans/EXECPLAN_LIBRARY_ALONE.md, L18, L22, L24).
+ */
+
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { hasFlag, option } from "./args.ts";
+import { buildAll } from "./build-all.ts";
+import { fewerEntries, nextPointer, pointerText } from "./release.ts";
+import { POINTER_PATH, readPointer } from "./site.ts";
+import { loadItemFacts, loadSkillCardTables, loadTables } from "./tables.ts";
+
+const FORMATS_DIR = join(import.meta.dirname, "..", "formats");
+
+/** Writes `text` at `path` unless the file already holds exactly it; true when it wrote. */
+function writeIfDifferent(path: string, text: string): boolean {
+  if (existsSync(path) && readFileSync(path, "utf8") === text) return false;
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, text);
+  return true;
+}
+
+/** Copies the format files (not their tests) to `<out>/formats/`, as they are published beside the data. */
+function copyFormats(out: string): void {
+  for (const name of readdirSync(FORMATS_DIR)) {
+    if (/^[a-z-]+\.v\d+\.ts$/.test(name)) writeIfDifferent(join(out, "formats", name), readFileSync(join(FORMATS_DIR, name), "utf8"));
+  }
+}
+
+async function main(argv: readonly string[]): Promise<void> {
+  const out = option(argv, "out", "out/site");
+  const previousSite = option(argv, "previous", out);
+  const now = new Date();
+
+  const [tables, skillCardTables, itemFacts] = await Promise.all([loadTables(), loadSkillCardTables(), loadItemFacts()]);
+  const all = buildAll({ tables, skillCardTables, itemFacts }, now.getTime());
+  const previous = await readPointer(previousSite);
+
+  const fewer = fewerEntries(previous, all.built);
+  if (fewer.length > 0 && !hasFlag(argv, "allow-fewer")) {
+    for (const line of fewer) console.error(line);
+    console.error("Nothing written. Rerun with --allow-fewer if this is a real removal in the game.");
+    process.exit(1);
+  }
+
+  // Every text exists before the first write.
+  const { pointer, fresh } = nextPointer(previous, all.built, now);
+  for (const f of fresh) writeIfDifferent(join(out, f.entry.path), f.text);
+  copyFormats(out);
+  const pointerMoved = writeIfDifferent(join(out, POINTER_PATH), pointerText(pointer));
+
+  for (const line of all.lines) {
+    const format = line.slice(0, line.indexOf(" "));
+    const release = fresh.find((f) => f.format === format);
+    console.log(`${line} — ${release ? `new release ${release.entry.release}` : "unchanged"}`);
+  }
+  for (const u of all.unread) console.log(`  UNREAD ${u.cardId} ${u.cardName} — ${u.reason}`);
+  console.log(pointerMoved ? `wrote ${join(out, POINTER_PATH)}` : "pointer unchanged");
+}
+
+if (import.meta.main) {
+  main(process.argv.slice(2)).catch((e: unknown) => {
+    console.error(e instanceof Error ? e.message : e);
+    process.exit(1);
+  });
+}

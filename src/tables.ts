@@ -4,7 +4,7 @@
  *
  * Each table is read from `<cacheDir>/<Table>.yaml` when present, otherwise
  * fetched from `<baseUrl><Table>.yaml` and written to the cache. Only the
- * fields the generators read are declared and checked for presence.
+ * fields the builders read are declared, and each row must give them their types.
  */
 
 import { load as loadYaml } from "js-yaml";
@@ -183,11 +183,6 @@ function isRecord(x: unknown): x is Record<string, unknown> {
   return typeof x === "object" && x !== null;
 }
 
-/** True when `rows` is a list of objects each carrying every key in `keys`. */
-function isRowsOf<T>(rows: unknown, keys: readonly (keyof T & string)[]): rows is T[] {
-  return Array.isArray(rows) && rows.every((row) => isRecord(row) && keys.every((k) => k in row));
-}
-
 export interface LoadOptions {
   cacheDir?: string;
   baseUrl?: string;
@@ -207,11 +202,12 @@ async function readTableText(name: string, opts: LoadOptions): Promise<string> {
 }
 
 /** The YAML type a field must have, checked by `loadTypedTable`. */
-export type FieldType = "string" | "number" | "boolean" | "string[]";
+export type FieldType = "string" | "number" | "boolean" | "string[]" | "list";
 export type FieldTypes<T> = Readonly<Record<keyof T & string, FieldType>>;
 
 function hasType(value: unknown, type: FieldType): boolean {
   if (type === "string[]") return Array.isArray(value) && value.every((v) => typeof v === "string");
+  if (type === "list") return Array.isArray(value);
   return typeof value === type;
 }
 
@@ -222,58 +218,61 @@ function rowName(row: Record<string, unknown>): string {
 }
 
 /** The first field of the first row whose value lacks its type, described for an error; null when every row is well typed. */
-export function firstMistyped(rows: readonly unknown[], fields: Readonly<Record<string, FieldType>>): string | null {
+export function firstMistyped(rows: readonly unknown[], fields: Readonly<Record<string, FieldType | undefined>>): string | null {
   for (const [i, row] of rows.entries()) {
     if (!isRecord(row)) return `row ${i} is not a mapping`;
     for (const [field, type] of Object.entries(fields)) {
-      if (!hasType(row[field], type)) return `row ${i} (${rowName(row)}): ${field} should be ${type}, is ${JSON.stringify(row[field]) ?? "missing"}`;
+      if (type !== undefined && !hasType(row[field], type)) return `row ${i} (${rowName(row)}): ${field} should be ${type}, is ${JSON.stringify(row[field]) ?? "missing"}`;
     }
   }
   return null;
 }
 
-function isTypedRows<T>(rows: unknown, fields: FieldTypes<T>): rows is T[] {
+function isTypedRows<T>(rows: unknown, fields: Readonly<Record<string, FieldType | undefined>>): rows is T[] {
   return Array.isArray(rows) && firstMistyped(rows, fields) === null;
 }
 
 /**
- * Like `loadTable`, but every row must also give each declared field its type. For the tables of
- * the skill card data and the items, where a value of another type would not fail a comparison
- * but silently fail it: an upgradeCount of "1" would never equal the number 1.
+ * A table's rows, each of which must give every declared field its type. A value of another type
+ * would not fail a comparison but silently fail it: an upgradeCount of "1" would never equal the number 1.
  */
 export async function loadTypedTable<T>(name: string, fields: FieldTypes<T>, opts: LoadOptions = {}): Promise<T[]> {
+  return loadPartlyTypedTable<T>(name, fields, opts);
+}
+
+/**
+ * Like `loadTypedTable`, for a row type with fields that cannot be declared here: a list of nested
+ * mappings is checked to be a list (`"list"`) and no deeper, and a field the game may leave out is
+ * not declared at all. The builders read those defensively.
+ */
+export async function loadPartlyTypedTable<T>(name: string, fields: Readonly<Partial<Record<keyof T & string, FieldType>>>, opts: LoadOptions = {}): Promise<T[]> {
   const parsed: unknown = loadYaml(await readTableText(name, opts));
   if (!Array.isArray(parsed)) throw new Error(`${name}.yaml: expected a list of rows`);
   if (!isTypedRows<T>(parsed, fields)) throw new Error(`${name}.yaml: ${firstMistyped(parsed, fields) ?? "malformed"}`);
   return parsed;
 }
 
-export async function loadTable<T>(name: string, keys: readonly (keyof T & string)[], opts: LoadOptions = {}): Promise<T[]> {
-  const parsed: unknown = loadYaml(await readTableText(name, opts));
-  if (!isRowsOf<T>(parsed, keys)) {
-    throw new Error(`${name}.yaml: expected a list of rows each having ${keys.join(", ")}`);
-  }
-  return parsed;
-}
+const SKILL_LEVEL_FIELDS: FieldTypes<RawSkillLevel> = { supportCardId: "string", produceSkillId: "string", produceSkillLevel: "number", supportCardLevel: "number" };
+/** ProduceSkill's second and third effect and trigger are not declared here: a skill with one effect may leave them out. */
+const PRODUCE_SKILL_FIELDS = { id: "string", level: "number", activationCount: "number", produceEffectId1: "string", produceTriggerId1: "string" } as const;
 
+/** The tables the support cards are built from, each declared field typed. */
 export async function loadTables(opts: LoadOptions = {}): Promise<Tables> {
-  const skillLevelKeys = ["supportCardId", "produceSkillId", "produceSkillLevel", "supportCardLevel"] as const;
-  const [cards, slVocal, slDance, slVisual, slAssist, skills, effects, triggers, levelLimits, eventCards, eventDetails, items, itemEffects] =
-    await Promise.all([
-      loadTable<RawSupportCard>("SupportCard", ["id", "name", "type", "rarity", "planType", "assetId", "supportCardLevelLimitId", "viewStartTime"], opts),
-      loadTable<RawSkillLevel>("SupportCardProduceSkillLevelVocal", skillLevelKeys, opts),
-      loadTable<RawSkillLevel>("SupportCardProduceSkillLevelDance", skillLevelKeys, opts),
-      loadTable<RawSkillLevel>("SupportCardProduceSkillLevelVisual", skillLevelKeys, opts),
-      loadTable<RawSkillLevel>("SupportCardProduceSkillLevelAssist", skillLevelKeys, opts),
-      loadTable<RawProduceSkill>("ProduceSkill", ["id", "level", "activationCount", "produceEffectId1", "produceTriggerId1"], opts),
-      loadTable<RawProduceEffect>("ProduceEffect", ["id", "produceEffectType", "effectValueMin", "effectValueMax", "produceRewards"], opts),
-      loadTable<RawProduceTrigger>("ProduceTrigger", ["id", "phaseType"], opts),
-      loadTable<RawLevelLimit>("SupportCardLevelLimit", ["id", "rank", "levelLimit"], opts),
-      loadTable<RawEventSupportCard>("ProduceEventSupportCard", ["supportCardId", "number", "supportCardLevel", "produceStepEventDetailId"], opts),
-      loadTable<RawEventDetail>("ProduceStepEventDetail", ["id", "produceEffectIds"], opts),
-      loadTable<RawProduceItem>("ProduceItem", ["id", "name", "assetId", "fireLimit", "produceTriggerId", "skills"], opts),
-      loadTable<RawProduceItemEffect>("ProduceItemEffect", ["id", "effectType", "produceEffectId"], opts),
-    ]);
+  const [cards, slVocal, slDance, slVisual, slAssist, skills, effects, triggers, levelLimits, eventCards, eventDetails, items, itemEffects] = await Promise.all([
+    loadTypedTable<RawSupportCard>("SupportCard", { id: "string", name: "string", type: "string", rarity: "string", planType: "string", assetId: "string", supportCardLevelLimitId: "string", viewStartTime: "string" }, opts),
+    loadTypedTable<RawSkillLevel>("SupportCardProduceSkillLevelVocal", SKILL_LEVEL_FIELDS, opts),
+    loadTypedTable<RawSkillLevel>("SupportCardProduceSkillLevelDance", SKILL_LEVEL_FIELDS, opts),
+    loadTypedTable<RawSkillLevel>("SupportCardProduceSkillLevelVisual", SKILL_LEVEL_FIELDS, opts),
+    loadTypedTable<RawSkillLevel>("SupportCardProduceSkillLevelAssist", SKILL_LEVEL_FIELDS, opts),
+    loadPartlyTypedTable<RawProduceSkill>("ProduceSkill", PRODUCE_SKILL_FIELDS, opts),
+    loadPartlyTypedTable<RawProduceEffect>("ProduceEffect", { id: "string", produceEffectType: "string", effectValueMin: "number", effectValueMax: "number", produceRewards: "list" }, opts),
+    loadTypedTable<RawProduceTrigger>("ProduceTrigger", { id: "string", phaseType: "string" }, opts),
+    loadTypedTable<RawLevelLimit>("SupportCardLevelLimit", { id: "string", rank: "string", levelLimit: "number" }, opts),
+    loadTypedTable<RawEventSupportCard>("ProduceEventSupportCard", { supportCardId: "string", number: "number", supportCardLevel: "number", produceStepEventDetailId: "string" }, opts),
+    loadTypedTable<RawEventDetail>("ProduceStepEventDetail", { id: "string", produceEffectIds: "string[]" }, opts),
+    loadPartlyTypedTable<RawProduceItem>("ProduceItem", { id: "string", name: "string", assetId: "string", fireLimit: "number", produceTriggerId: "string", skills: "list" }, opts),
+    loadTypedTable<RawProduceItemEffect>("ProduceItemEffect", { id: "string", effectType: "string", produceEffectId: "string" }, opts),
+  ]);
   return {
     cards,
     skillLevels: [...slVocal, ...slDance, ...slVisual, ...slAssist],

@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadTypedTable } from "./tables.ts";
+import { loadPartlyTypedTable, loadTypedTable } from "./tables.ts";
 
 interface Row {
   id: string;
@@ -52,6 +52,15 @@ describe("loadTypedTable", () => {
   test("stops on a list holding something other than strings, or a missing field", async () => {
     expect(await failure(load("NumberInList", GOOD.replace("[k-1, k-2]", "[k-1, 2]")))).toContain("produceCardCustomizeIds should be string[]");
     expect(await failure(load("Missing", GOOD.replace("  upgradeCount: 1\n", "")))).toContain("upgradeCount should be number, is missing");
+  });
+
+  test("a field declared as a list must be a list, whatever it holds", async () => {
+    writeFileSync(join(dir, "Nested.yaml"), "- id: e-1\n  produceRewards:\n    - resourceType: x\n");
+    const fields = { id: "string", produceRewards: "list" } as const;
+    const rows: unknown = await loadPartlyTypedTable<{ id: string; produceRewards: unknown[]; other?: string }>("Nested", fields, { cacheDir: dir, baseUrl: "http://127.0.0.1:9/" });
+    expect(rows).toEqual([{ id: "e-1", produceRewards: [{ resourceType: "x" }] }]);
+    writeFileSync(join(dir, "NotNested.yaml"), "- id: e-1\n  produceRewards: none\n");
+    expect(await failure(loadPartlyTypedTable("NotNested", fields, { cacheDir: dir, baseUrl: "http://127.0.0.1:9/" }))).toContain('NotNested.yaml: row 0 (e-1): produceRewards should be list, is "none"');
   });
 
   test("stops on a table that is not a list of mappings", async () => {

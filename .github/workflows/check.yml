@@ -1,0 +1,30 @@
+# Guards: develop. Runs on every pull request into develop the checks a change must pass before a
+# person merges it: the unit tests, the type check and the lint. Read-only: it gets no secrets and
+# cannot write to the repository, which is what makes it safe to run on a pull request whose code
+# is not yet trusted. It fetches nothing from the game: the tests are hermetic.
+name: Check
+
+on:
+  pull_request:
+    branches: [develop]
+
+permissions:
+  contents: read
+
+# A new push to the same pull request replaces the run for the old one.
+concurrency:
+  group: check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.4.3"
+      - run: bun install --frozen-lockfile
+      - run: bun test
+      - run: bun run type-check
+      - run: bun run lint

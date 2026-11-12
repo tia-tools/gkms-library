@@ -3,6 +3,9 @@
  * level, and every memory ability, as facts an app can filter by. The file does not read a skill
  * card's effects.
  *
+ * The orders the comments below name are how the library writes the file; `parse` checks shape and
+ * uniqueness, not order.
+ *
  * A format is the shape of a published file; this file is both its types and its check, and it never
  * changes once published: a change of shape is a new version number in a new file
  * (docs/adr/0005). An app copies this file verbatim and checks downloaded data with `parse`.

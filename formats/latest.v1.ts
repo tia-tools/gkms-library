@@ -7,6 +7,9 @@
  * first 8 hex digits of the file's SHA-256 (`20261110T0300Z-1a2b3c4d`). An app that shows data
  * live fetches this pointer and then the path it gives (docs/adr/0004).
  *
+ * The orders the comments below name are how the library writes the file; `parse` checks shape and
+ * uniqueness, not order.
+ *
  * This file is both the pointer's types and its check, and it never changes once published
  * (docs/adr/0005). It imports nothing but Valibot (major version 1).
  */
@@ -19,7 +22,7 @@ export const LatestFile = v.pipe(
   v.strictObject({
     format: v.picklist(FORMATS),
     formatVersion: v.pipe(v.number(), v.integer(), v.minValue(1)),
-    release: v.pipe(v.string(), v.regex(/^\d{8}T\d{4}Z-[0-9a-f]{8}$/, "a release is named <YYYYMMDDTHHMM>Z-<8 hex digits>")),
+    release: v.pipe(v.string(), v.regex(/^\d{4}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3])[0-5]\dZ-[0-9a-f]{8}$/, "a release is named <YYYYMMDDTHHMM>Z-<8 hex digits>")),
     /** Where the release is, relative to the address's root. */
     path: v.string(),
     /** The SHA-256 of the release's bytes, as 64 hex digits. */

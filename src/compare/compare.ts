@@ -52,7 +52,11 @@ function difference(kind: Difference["kind"], name: string, where: readonly stri
   return where.length === 0 ? [] : [{ kind, name, count: where.length, examples: where.slice(0, 5) }];
 }
 
-/** JSON with every object's keys in order, so two values compare equal whatever order their keys were written in. */
+/**
+ * JSON with every object's keys in order, so two values compare equal whatever order their keys
+ * were written in. For values parsed from JSON, which is all the comparison gives it: there a key is
+ * never `undefined`, and 0 and -0, which this writes alike, are one number to any reader.
+ */
 export function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
   if (typeof value === "object" && value !== null) {

@@ -127,6 +127,7 @@ describe("support-cards v1", () => {
     expect(refusal(parseSupportCards, { ...good, cards: [{ ...card, breakpoints: [] }] })).toBe("support-cards v1: cards.0.breakpoints: a card has no breakpoint");
     expect(refusal(parseSupportCards, { ...good, levelLimits: { ...good.levelLimits, r: [20, 25, 30, 35] } })).toContain("support-cards v1: levelLimits.r");
     expect(refusal(parseSupportCards, { ...good, cards: [{ ...card, spRate: false }] })).toContain("support-cards v1: cards.0.spRate:");
+    expect(refusal(parseSupportCards, { ...good, unread: [good.unread[0], good.unread[0]] })).toBe("support-cards v1: unread: a card's reason appears twice");
   });
 });
 
@@ -146,5 +147,8 @@ describe("latest v1", () => {
     expect(refusal(parseLatest, { ...good, files: [] })).toBe("latest v1: files: the pointer names no release");
     expect(refusal(parseLatest, { ...good, files: [{ ...file, format: "scores" }] })).toContain("latest v1: files.0.format:");
     expect(refusal(parseLatest, { ...good, files: [{ ...file, entries: 0 }] })).toContain("latest v1: files.0.entries:");
+    for (const stamp of ["20261310T0300Z", "20261132T0300Z", "20261110T2400Z", "20261110T0360Z"]) {
+      expect(refusal(parseLatest, { ...good, files: [{ ...file, release: `${stamp}-ba7816bf`, path: `data/idols/v1/${stamp}-ba7816bf.json` }] })).toBe("latest v1: files.0.release: a release is named <YYYYMMDDTHHMM>Z-<8 hex digits>");
+    }
   });
 });

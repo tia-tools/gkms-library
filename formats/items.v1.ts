@@ -4,6 +4,9 @@
  * The file does not read an item's effects. The effects of the items support cards grant are read
  * in the format `support-cards`, on the card that grants them.
  *
+ * The orders the comments below name are how the library writes the file; `parse` checks shape and
+ * uniqueness, not order.
+ *
  * A format is the shape of a published file; this file is both its types and its check, and it never
  * changes once published: a change of shape is a new version number in a new file
  * (docs/adr/0005). An app copies this file verbatim and checks downloaded data with `parse`.

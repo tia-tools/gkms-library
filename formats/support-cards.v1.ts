@@ -8,6 +8,9 @@
  * (something that happens in a run), filters (which of its occurrences qualify) and conditions
  * (what state of the run must hold at that moment).
  *
+ * The orders the comments below name are how the library writes the file; `parse` checks shape and
+ * uniqueness, not order.
+ *
  * A format is the shape of a published file; this file is both its types and its check, and it never
  * changes once published: a change of shape is a new version number in a new file
  * (docs/adr/0005). An app copies this file verbatim and checks downloaded data with `parse`.
@@ -142,7 +145,10 @@ export const SupportCardsFile = v.strictObject({
     v.check((cards) => new Set(cards.map((card) => card.id)).size === cards.length, "a card id appears twice"),
   ),
   /** One entry per card and distinct reason, by card id and then reason; empty when every effect was read. */
-  unread: v.array(Unread),
+  unread: v.pipe(
+    v.array(Unread),
+    v.check((unread) => new Set(unread.map((u) => `${u.cardId}\n${u.reason}`)).size === unread.length, "a card's reason appears twice"),
+  ),
 });
 export type SupportCardsFile = v.InferOutput<typeof SupportCardsFile>;
 

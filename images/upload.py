@@ -10,7 +10,9 @@ master to the private bucket, then its public copy to the public one.
 goes first, so a public copy that is served implies a stored master. The upload itself goes through
 `wrangler r2 object put` (r2.py), with the Wrangler login locally or CLOUDFLARE_API_TOKEN in an
 unattended run. An image that is missing and not on disk stops the run before anything is uploaded,
-unless extract.py recorded that the game does not offer it (docs/plans/EXECPLAN_LIBRARY_ALONE.md, L23).
+unless extract.py, run on the same data and over all of it, recorded that the game does not offer it
+(docs/plans/EXECPLAN_LIBRARY_ALONE.md, L23). The summary's `upload_complete` says whether every image
+the data names and the game offers is now stored; a run cut short by --limit says false.
 """
 
 from __future__ import annotations
@@ -25,7 +27,7 @@ from local_files import complete_on_disk, path_of, read_summary, update_summary
 from r2 import put
 from site_data import read_site_data, reader_for
 from stored import DEFAULT_BASE_URL, ask_all, served_by
-from uploads import plan_uploads, unexplained_absences, upload_order
+from uploads import not_offered_by, plan_uploads, unexplained_absences, upload_order
 from wanted import wanted_file_names
 
 HERE = Path(__file__).resolve().parent
@@ -52,7 +54,7 @@ def main() -> int:
     wanted = wanted_file_names(read_site_data(reader_for(args.site)))
     stored = set() if args.assume_empty else ask_all(wanted, served_by(args.base_url, str(int(time.time()))))
     plan = plan_uploads(wanted, stored, complete_on_disk(args.out, wanted))
-    not_offered = read_summary(args.out).get("not_offered", [])
+    not_offered = not_offered_by(read_summary(args.out), wanted)
     unexplained = unexplained_absences(plan.absent, not_offered)
     print(f"the data names {len(wanted)} image(s): {len(wanted) - len(plan.to_upload) - len(plan.absent)} already served, {len(plan.to_upload)} to upload, {len(plan.absent)} not on disk ({len(plan.absent) - len(unexplained)} of them not offered by the game)")
     if unexplained:
@@ -70,7 +72,10 @@ def main() -> int:
             done += 1
             if done % 50 == 0 or done == len(names):
                 print(f"uploaded {done} of {len(names)} ({time.monotonic() - started:.0f} s), last {name}")
-    update_summary(args.out, uploaded=done)
+    # Complete only when nothing the data names was left out: not by --limit, not for the game not offering it.
+    update_summary(args.out, uploaded=done, upload_complete=len(names) == len(plan.to_upload), still_not_offered=sorted(set(plan.absent)))
+    if len(names) < len(plan.to_upload):
+        print(f"{len(plan.to_upload) - len(names)} image(s) left for another run (--limit)")
     return 0
 
 

@@ -1,4 +1,4 @@
-from uploads import IMMUTABLE, MASTERS_BUCKET, PUBLIC_BUCKET, REVALIDATE, Put, plan_extraction, plan_uploads, unexplained_absences, upload_order
+from uploads import IMMUTABLE, MASTERS_BUCKET, PUBLIC_BUCKET, REVALIDATE, Put, names_digest, not_offered_by, plan_extraction, plan_uploads, unexplained_absences, upload_order
 
 A, B, C, D, E = (f"img_general_pitem_2-00{i}.webp" for i in range(1, 6))
 
@@ -41,3 +41,23 @@ def test_an_absent_file_is_explained_only_by_the_game_not_offering_it():
     assert unexplained_absences([C, D], not_offered=[D]) == [C]
     assert unexplained_absences([D], not_offered=[D, E]) == []
     assert unexplained_absences([], not_offered=[]) == []
+
+
+def test_a_digest_names_a_set_of_files_whatever_their_order():
+    assert names_digest([A, B, B]) == names_digest([B, A])
+    assert names_digest([A, B]) != names_digest([A, B, C])
+    assert names_digest([]) != names_digest([A])
+
+
+def summary(wanted, **over):
+    return {"named_digest": names_digest(wanted), "extraction_complete": True, "not_offered": [D], **over}
+
+
+def test_a_summary_excuses_what_the_game_does_not_offer_only_for_the_same_data_looked_at_whole():
+    wanted = [A, B, D]
+    assert not_offered_by(summary(wanted), wanted) == [D]
+    assert not_offered_by(summary(wanted), [A, B, D, E]) == []  # the data changed since: the list is about other files
+    assert not_offered_by(summary(wanted, extraction_complete=False), wanted) == []  # --only, --limit, a failure or a killed run
+    assert not_offered_by(summary(wanted, extraction_complete="yes"), wanted) == []
+    assert not_offered_by({}, wanted) == []  # no summary at all
+    assert not_offered_by({"not_offered": [D]}, wanted) == []  # a summary of an older shape

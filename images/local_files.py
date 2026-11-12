@@ -37,6 +37,13 @@ def read_summary(out: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
 
 
+def start_summary(out: Path, **fields: Any) -> None:
+    """Replaces the summary file: a new extraction starts a new summary, so nothing an earlier run
+    wrote can speak for this one."""
+    out.mkdir(parents=True, exist_ok=True)
+    (out / SUMMARY_NAME).write_text(json.dumps(fields, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
 def update_summary(out: Path, **fields: Any) -> None:
     """Merges `fields` into the summary file, keeping what other steps wrote."""
     out.mkdir(parents=True, exist_ok=True)

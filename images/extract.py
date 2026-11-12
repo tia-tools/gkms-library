@@ -8,7 +8,8 @@ master (out/masters/) and its public copy at display size (out/site/img/...).
 
 Only images the data names are ever fetched: the game's manifest also carries images of things not
 released yet (docs/adr/0002). An image the game does not offer is listed in the summary and stops
-nothing; one it offers that fails to download or decode makes the run exit 1, naming it
+nothing; the summary (out/images-summary.json) is started anew by every run and vouches for the
+whole of the data only when the run looked at all of it, without --only or --limit; one it offers that fails to download or decode makes the run exit 1, naming it
 (docs/plans/EXECPLAN_LIBRARY_ALONE.md, L23).
 
 GkmasObjectManager (GPL-3.0, not a package) is used only for what it does well: fetching and
@@ -25,11 +26,11 @@ import time
 from pathlib import Path
 
 from decode import DecodeError, decode_texture
-from local_files import complete_on_disk, master_path, public_path, update_summary
+from local_files import complete_on_disk, master_path, public_path, start_summary
 from renditions import MANIFEST_PATTERNS, file_name_for, master_rendition, object_name_for, public_rendition
 from site_data import read_site_data, reader_for
 from stored import DEFAULT_BASE_URL, ask_all, served_by
-from uploads import plan_extraction
+from uploads import names_digest, plan_extraction
 from wanted import wanted_file_names
 
 HERE = Path(__file__).resolve().parent
@@ -75,9 +76,11 @@ def main() -> int:
     ap.add_argument("--force", action="store_true", help="extract again images already complete on disk")
     args = ap.parse_args()
 
-    wanted = wanted_file_names(read_site_data(reader_for(args.site)))
-    if args.only:
-        wanted = {n for n in wanted if re.search(args.only, n)}
+    named = wanted_file_names(read_site_data(reader_for(args.site)))
+    wanted = {n for n in named if re.search(args.only, n)} if args.only else named
+    # A summary speaks for the whole of the data only when this run looked at all of it.
+    whole = not args.only and not args.limit
+    start_summary(args.out, named_digest=names_digest(named), extraction_complete=False)
     stored = set() if args.all else ask_all(wanted, served_by(args.base_url, str(int(time.time()))))
     manifest = load_manifest()
     on_disk = set() if args.force else complete_on_disk(args.out, wanted)
@@ -96,7 +99,19 @@ def main() -> int:
         print(f"converted {len(names) - len(failures)} of {len(names)} into {args.out / 'masters'} and {args.out / 'site' / 'img'}")
     for f in failures:
         print("FAILED", f, file=sys.stderr)
-    update_summary(args.out, manifest=str(manifest.version), named=len(wanted), served_before=len(stored), extracted=len(names) - len(failures), not_offered=list(plan.not_offered), failed=failures)
+    start_summary(
+        args.out,
+        named_digest=names_digest(named),
+        extraction_complete=whole and not failures,
+        manifest=str(manifest.version),
+        named=len(wanted),
+        served_before=len(stored),
+        extracted=len(names) - len(failures),
+        not_offered=list(plan.not_offered),
+        failed=failures,
+    )
+    if not whole:
+        print("a part of the images only (--only or --limit): this run does not vouch for the rest")
     return 1 if failures else 0
 
 

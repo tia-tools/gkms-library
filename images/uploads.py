@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Any, Iterable
 
 from renditions import public_key
 
@@ -61,6 +62,21 @@ def plan_uploads(wanted: Iterable[str], stored: Iterable[str], on_disk: Iterable
     wanted, stored, on_disk = set(wanted), set(stored), set(on_disk)
     lacking = wanted - stored
     return UploadPlan(tuple(sorted(lacking & on_disk)), tuple(sorted(lacking - on_disk)))
+
+
+def names_digest(file_names: Iterable[str]) -> str:
+    """A SHA-256 over a set of file names, whatever order they come in: it says which set a summary is about."""
+    return hashlib.sha256("\n".join(sorted(set(file_names))).encode("utf-8")).hexdigest()
+
+
+def not_offered_by(summary: dict[str, Any], wanted: Iterable[str]) -> list[str]:
+    """The files the summary may excuse as not offered by the game: its `not_offered` list, but only
+    when extract.py wrote it for exactly these wanted files and looked at all of them (no `--only`,
+    no `--limit`). A summary about other data, or about a part of it, excuses nothing: the image it
+    lists may be one the game offers now."""
+    if summary.get("extraction_complete") is not True or summary.get("named_digest") != names_digest(wanted):
+        return []
+    return list(summary.get("not_offered", []))
 
 
 def unexplained_absences(absent: Iterable[str], not_offered: Iterable[str]) -> list[str]:

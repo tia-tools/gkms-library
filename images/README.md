@@ -42,6 +42,8 @@ All read the data from `--site`, by default `out/site/` at the repository root, 
 
 `upload.py` uploads what the address lacks and the disk holds. The master goes first, so a public copy that is served always has a stored master. It stops before uploading anything if an image is missing on disk for any reason other than the game not offering it.
 
+`out/images-summary.json` is what the two commands tell the daily run. `extract.py` starts it anew every time. It vouches for the whole of the data (`extraction_complete`) only when the run looked at all of it, without `--only` or `--limit`, and nothing failed; `upload.py` takes its `not_offered` list as an excuse only then, and only if the data is still the same. `upload_complete` says that every image the data names and the game offers is stored; a run cut short by `--limit` says false.
+
 Decoding is ours (`decode.py`). The bundles have their Unity version stripped, and a wrong guess yields a texture of absurd size instead of an error, so each known engine version is tried in order. If a game update breaks decoding, add the new version to the front of `UNITY_VERSIONS`. `extract.py` also prints `SyntaxWarning: invalid escape sequence` lines from `pydub`, a dependency of the vendored tool, about its own regular expressions; they are harmless.
 
 ## Masters for an app's own image build

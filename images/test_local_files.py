@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from local_files import complete_on_disk, master_path, path_of, public_path, read_summary, update_summary
+from local_files import complete_on_disk, master_path, path_of, public_path, read_summary, start_summary, update_summary
 from uploads import upload_order
 
 FACE = "img_sd_hski_face-00.webp"
@@ -26,3 +26,9 @@ def test_the_summary_keeps_what_other_steps_wrote(tmp_path):
     update_summary(tmp_path, extracted=3, not_offered=["a.webp"])
     update_summary(tmp_path, uploaded=3)
     assert read_summary(tmp_path) == {"extracted": 3, "not_offered": ["a.webp"], "uploaded": 3}
+
+
+def test_a_new_extraction_starts_a_new_summary(tmp_path):
+    update_summary(tmp_path, not_offered=["old.webp"], uploaded=3)
+    start_summary(tmp_path, extraction_complete=False)
+    assert read_summary(tmp_path) == {"extraction_complete": False}

@@ -1,7 +1,7 @@
 /**
  * Builds the four data files from the game's tables and checks each against its format. Pure:
  * tables and the clock are passed in. Throws before anything is returned when a builder cannot
- * represent a row or a file fails its format, so a run that fails writes nothing
+ * represent a row or a file fails its format, so such a run writes nothing
  * (docs/plans/EXECPLAN_LIBRARY_ALONE.md, L22).
  */
 

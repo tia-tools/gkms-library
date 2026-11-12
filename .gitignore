@@ -1,0 +1,17 @@
+# dependencies (bun install)
+node_modules
+
+# local cache of the game's tables (fetched again on demand)
+.cache
+
+# generated releases, images and working files; nothing here is committed
+out
+
+# image extraction: third-party checkout and virtualenv
+images/vendor
+images/.venv
+__pycache__
+
+# logs and OS files
+*.log
+.DS_Store

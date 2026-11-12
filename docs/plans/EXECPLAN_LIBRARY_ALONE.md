@@ -22,7 +22,7 @@ Each milestone is one issue and one branch, merged through a pull request into `
 - [x] (2026-11-09 23:57Z) Milestone 0 (#2), second question: the schema library is Valibot (L28), chosen by the trial in `prototypes/schema/`; its numbers are in Artifacts and Notes and ADR 0005's addendum.
 - [x] (2026-11-10 00:24Z) Milestone 0 (#2), first question: the user answered job #10 with A; the buckets `gkms-library` and `gkms-library-masters` exist, `gkms-library.tia.run` is connected with the CORS policy in `infra/cors.json`, and the address was measured: no Worker request, and a cache hit is no Class B operation (Surprises & Discoveries; ADR 0003's addendum). The Cache Rule for JSON was not added (L29).
 - [x] (2026-11-10 07:56Z) Milestone 0 (#2): the probe objects and `prototypes/` deleted; Milestone 0 is complete once its pull request merges.
-- [x] (2026-11-11 23:01Z) Milestone 1 (#3): `bun run generate` writes the four data files as releases with the pointer and the format files into `out/site/`; `bun run compare --site out/site` reports no unexpected difference from gakumas-supportcards' live files; 122 tests, the type check and the lint pass, and each new rule's test was seen to fail with the rule broken (33 mutations, all caught). Complete once its pull request merges.
+- [x] (2026-11-11 23:01Z) Milestone 1 (#3): `bun run generate` writes the four data files as releases with the pointer and the format files into `out/site/`; `bun run compare --site out/site` reports no unexpected difference from gakumas-supportcards' live files; 125 tests, the type check and the lint pass, and each new rule's test was seen to fail with the rule broken (37 mutations, all caught). Complete once its pull request merges.
 - [ ] Milestone 2 (#4): the images, extracted here, with public copies and private masters; the sync command.
 - [ ] Milestone 3 (#5): the daily run publishes both; the comparison check runs in it; failures reach Discord; two consecutive unattended runs succeed.
 
@@ -362,7 +362,7 @@ As run on 2026-11-11, with `.cache/` deleted first so the tables are fetched:
     expected   470 × memory abilities only here (that site publishes H.I.F.'s, of its pool)
     no unexpected difference
     $ bun test
-    122 pass, 0 fail
+    125 pass, 0 fail
 
 An expected difference is printed only when its count is not zero. With a copy of the tables in which one support card's name was changed (`GAKUMASU_DIFF_CACHE=<copy> bun run generate`), the run printed `unchanged` for three formats and `new release` for `support-cards` only; with one idol made unplayable it printed `idols v1 would list 12 entries, fewer than the 13 of …` and `Nothing written.`, and exited 1. The releases are 500 bytes (idols), 209 KB (items), 987 KB (skill cards) and 1,587 KB (support cards).
 
@@ -511,3 +511,5 @@ Revision note, 2026-11-10 (#2, the address measured): the buckets and the domain
 Revision note, 2026-11-10 (#2, after a Codex review): the claim that a cache hit is no Class B operation rested on a count with about 60 reads not all accounted for, so it was measured again with a baseline and a final reading (646 to 647 across 1,000 cache hits); L18's rationale now says the pointer's five minutes are a browser's, not Cloudflare's cache; L3 and L7 no longer speak of Milestone 0's two results as future.
 
 Revision note, 2026-11-11 (#3, Milestone 1 done): Progress, Concrete Steps (the real transcript) and Outcomes were updated; three observations and decisions L30–L32 were added; the table counts in Artifacts and Notes were corrected from freshly fetched tables, the first ones having come from a cache of two ages.
+
+Revision note, 2026-11-12 (#3, after a Codex review of Milestone 1's code): a release file is never overwritten with other content (`src/files.ts`), where it would have been if two contents ever shared a name; `support-cards` refuses a card's reason listed twice in `unread`; a release's name must be a real date and time; each format file now says that `parse` checks shape and uniqueness, not the orders its comments name; and the comments that said a failed run "writes nothing" now say what L22 says, that the pointer is written last. One finding was answered, not fixed: that the comparison's `canonical` writes 0 and -0 alike and drops `undefined` keys. It is only given values parsed from JSON, where no key is `undefined` and the two zeros are one number to any reader; its comment now says so.

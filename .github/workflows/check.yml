@@ -1,5 +1,6 @@
 # Guards: develop. Runs on every pull request into develop the checks a change must pass before a
-# person merges it: the unit tests, the type check and the lint. Read-only: it gets no secrets and
+# person merges it: the unit tests, the type check and the lint of the data side, and the unit tests
+# of the image pipeline. Read-only: it gets no secrets and
 # cannot write to the repository, which is what makes it safe to run on a pull request whose code
 # is not yet trusted. It fetches nothing from the game: the tests are hermetic.
 name: Check
@@ -28,3 +29,9 @@ jobs:
       - run: bun test
       - run: bun run type-check
       - run: bun run lint
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - name: Image pipeline tests
+        working-directory: images
+        run: |
+          uv sync --frozen
+          uv run pytest

@@ -24,7 +24,8 @@ Each milestone is one issue and one branch, merged through a pull request into `
 - [x] (2026-11-10 07:56Z) Milestone 0 (#2): the probe objects and `prototypes/` deleted; Milestone 0 is complete once its pull request merges.
 - [x] (2026-11-11 23:01Z) Milestone 1 (#3): `bun run generate` writes the four data files as releases with the pointer and the format files into `out/site/`; `bun run compare --site out/site` reports no unexpected difference from gakumas-supportcards' live files; 125 tests, the type check and the lint pass, and each new rule's test was seen to fail with the rule broken (37 mutations, all caught). Complete once its pull request merges.
 - [x] (2026-11-12 21:04Z) Milestone 2 (#4): all 2,928 images the data names are extracted (none failed, none missing from the game) and uploaded, each master to `gkms-library-masters` and each public copy to `gkms-library`; a second plan finds nothing to upload; a master's name answers 404 at the public address; `bun run sync-masters` brought the 13 face masters and nothing on a second run. 55 Python tests pass, 28 mutations all caught. Complete once its pull request merges.
-- [ ] Milestone 3 (#5): the daily run publishes both; the comparison check runs in it; failures reach Discord; two consecutive unattended runs succeed.
+- [x] (2026-11-13 02:35Z) Milestone 3 (#5), built: `bun run publish`, `bun run daily`, `compare --images`, `.github/workflows/update.yml` and the README. 168 tests, the type check and the lint pass; 26 mutations all caught; `bun run daily --dry-run` runs every step against the live address and would upload ten files.
+- [ ] Milestone 3 (#5), remaining: the first publication (job #17 asks whether now, from the owner's machine, or by the first workflow run); `formats/pinned.test.ts` once the formats are published; the token and the two secrets (job #18); the release merge of `develop` into `main`; a first run by hand; two consecutive scheduled runs that succeed; close-out.
 
 ## Surprises & Discoveries
 
@@ -75,6 +76,9 @@ Each milestone is one issue and one branch, merged through a pull request into `
 
 - Observation: every image the data names is offered by the game today: of 2,928, none was missing from the manifest (`205100:0085`) and none failed to decode, the `sup` and `acc` skill card icons included. The masters are 375 MB, the public copies 13 MB.
   Evidence: `uv run extract.py --all`: `converted 2899 of 2899` after a sample of 29; `out/images-summary.json`.
+
+- Observation: a scheduled run on this account starts hours after its time. gakumas-supportcards' runs, set for 11:30 and 20:30 Japan time, started between 18:40 and 19:10 and between 03:45 and 04:05 Japan time on 2026-11-10 to 11-12, six and a half to seven and a half hours late, every one succeeding. Those times also show that the `timezone` key of a schedule is accepted and applied: read as UTC, the same crons would have had to start an hour and a half early.
+  Evidence: `gh run list -R tia-tools/gakumas-supportcards --workflow update-data.yml`: `schedule 2026-11-12T10:00:15Z`, `2026-11-12T19:01:48Z`, and four more like them. Consequence: L25's "twenty minutes after gakumas-supportcards' runs" is a nominal order, not a guarantee; the comparison does not depend on it, since a support card only the library has is expected (L26).
 
 - Observation: the icons of the skill cards left out of today's pool have names the image pipeline does not recognise. Its pattern accepts the kinds `act`, `men` and `ido`; the complete table also has `sup` (236 rows, the cards support cards' events give) and `acc` (1 row).
   Evidence: `SKILLCARD_OBJECT_NAME` in gakumas-supportcards' `scripts/images/thumbnail.py`, against the `assetId` values of `ProduceCard`. Consequence: Milestone 2 widens the pattern, and stops when the data names an image no pattern matches.
@@ -229,6 +233,14 @@ The decisions are numbered L1, L2, … Decisions that outlive this plan are also
 
 - Decision: L34 — the image pipeline's dependencies were resolved afresh (`images/uv.lock`) instead of keeping gakumas-supportcards' lock file.
   Rationale: not intended: the copied lock was deleted while renaming the project. The fresh resolution is what extracted and decoded all 2,928 images, so it is the proven one here.
+  Date/Author: 2026-11-13, agent.
+
+- Decision: L35 — `compare --images` asks only the library's address, for the card art and item icons gakumas-supportcards' data names, and does not ask that site whether it serves them.
+  Rationale: the question is whether the library lacks something; asking the other site as well would be about 270 requests to its Worker twice a day, which count toward the daily limit this design exists to leave.
+  Date/Author: 2026-11-13, agent.
+
+- Decision: L36 — `bun run generate` writes every release the pointer names into the output directory, not only the new ones.
+  Rationale: on a runner the directory starts empty, and the image steps and the publication read the releases from it; a kept release has the same hash as before, hence the same bytes.
   Date/Author: 2026-11-13, agent.
 
 ## Outcomes & Retrospective
@@ -544,3 +556,5 @@ Revision note, 2026-11-12 (#3, after a Codex review of Milestone 1's code): a re
 Revision note, 2026-11-13 (#4, Milestone 2 done): Progress, Concrete Steps (the real transcript), Outcomes and the image counts were updated; two observations and decisions L33 (the sync command is Python) and L34 (the lock file was resolved afresh) were added.
 
 Revision note, 2026-11-13 (#4, after a Codex review of Milestone 2's code): the summary file could excuse a missing image wrongly, by a list left from an earlier run, from other data, or from a run over a part of the images, and `--limit` could leave images out while both commands exited 0. Now every extraction starts the summary anew, it records which set of names it is about and whether the run looked at all of them, `upload.py` accepts its `not_offered` list only then, and both commands record whether they were complete; Milestone 3's `daily` is to stop on an incomplete one. About 2.6 % of the first upload's puts (148 of 5,756) failed once and passed on the retry.
+
+Revision note, 2026-11-13 (#5, Milestone 3 built, after a Codex review of its code): Progress splits Milestone 3 into what is built and what remains; one observation (scheduled runs start hours late here, and the `timezone` key works) and decisions L35 and L36 were added. Of the review's five findings three were fixed: a comparison that crashes is now a failure of the report, not "no difference"; the publication reads its format files back as well; and the daily run removes an earlier run's report before it starts. Two were answered. That a schedule's `timezone` key is invalid: gakumas-supportcards' workflow uses it and runs twice a day, at times that fit Japan time and cannot fit UTC. That a kept release written locally could differ from the address's: an entry is kept only when the content's SHA-256 equals the one the pointer names, and the publication refuses a file that differs anyway.

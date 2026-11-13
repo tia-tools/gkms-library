@@ -50,28 +50,32 @@ export function releasePath(format: FormatName, formatVersion: number, release: 
 const sameFormat = (a: { format: string; formatVersion: number }, b: { format: string; formatVersion: number }): boolean => a.format === b.format && a.formatVersion === b.formatVersion;
 
 /**
- * The pointer after this run, and the built files that need a new release. A format whose content
+ * The pointer after this run, the built files that need a new release (`fresh`), and every built
+ * file with the pointer entry that names it, new or kept (`named`). A format whose content
  * hashes as the previous pointer's release keeps that entry; an entry of the previous pointer for a
  * format and version this run did not build is kept too, so an older version stays named while it
  * is still published.
  */
-export function nextPointer(previous: Latest | null, built: readonly Built[], now: Date): { pointer: Latest; fresh: Fresh[] } {
+export function nextPointer(previous: Latest | null, built: readonly Built[], now: Date): { pointer: Latest; fresh: Fresh[]; named: Fresh[] } {
   const fresh: Fresh[] = [];
+  const named: Fresh[] = [];
   const files: LatestFile[] = (previous?.files ?? []).filter((old) => !built.some((b) => sameFormat(b, old)));
   for (const b of built) {
     const sha256 = sha256Hex(b.text);
     const old = previous?.files.find((f) => sameFormat(f, b));
     if (old?.sha256 === sha256) {
       files.push(old);
+      named.push({ ...b, entry: old });
       continue;
     }
     const release = releaseName(now, sha256);
     const entry: LatestFile = { format: b.format, formatVersion: b.formatVersion, release, path: releasePath(b.format, b.formatVersion, release), sha256, entries: b.entries };
     files.push(entry);
     fresh.push({ ...b, entry });
+    named.push({ ...b, entry });
   }
   files.sort((a, b) => byCodeUnit(a.format, b.format) || a.formatVersion - b.formatVersion);
-  return { pointer: { pointerVersion: 1, files }, fresh };
+  return { pointer: { pointerVersion: 1, files }, fresh, named };
 }
 
 /** The pointer's text: indented, since a person opens this file; deterministic like every other. */

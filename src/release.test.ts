@@ -39,6 +39,13 @@ describe("nextPointer", () => {
     expect(pointerText(pointer)).toBe(pointerText(first));
   });
 
+  test("every built file is named with the entry that points at it, new or kept, so all can be written", () => {
+    const first = nextPointer(null, [idols("A"), items("B")], NOW).pointer;
+    const { named, fresh } = nextPointer(first, [idols("A"), items("B2", 1076)], new Date("2026-11-11T03:00:00Z"));
+    expect(fresh.map((f) => f.format)).toEqual(["items"]);
+    expect(named.map((f) => `${f.entry.path} ${f.text}`)).toEqual([`data/idols/v1/20261110T0300Z-${sha256Hex("A").slice(0, 8)}.json A`, `data/items/v1/20261111T0300Z-${sha256Hex("B2").slice(0, 8)}.json B2`]);
+  });
+
   test("only the format whose content changed gets a new release", () => {
     const first = nextPointer(null, [idols("A"), items("B")], NOW).pointer;
     const { pointer, fresh } = nextPointer(first, [idols("A"), items("B2", 1076)], new Date("2026-11-11T03:00:00Z"));

@@ -69,6 +69,17 @@ export interface Report {
   unexpected: readonly string[] | null;
 }
 
+/**
+ * What the comparison found, for the report: null when it did not run, its unexpected differences
+ * when it ran to the end, and one line saying so when it stopped without finishing. A comparison
+ * that crashed has found nothing, which is not the same as finding no difference.
+ */
+export function comparisonOutcome(ran: boolean, exitedZero: boolean, unexpected: readonly string[]): readonly string[] | null {
+  if (!ran) return null;
+  if (!exitedZero && unexpected.length === 0) return ["the comparison stopped before it finished"];
+  return unexpected;
+}
+
 const count = (value: unknown): number => (typeof value === "number" ? value : 0);
 const names = (value: unknown): string[] => (Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : []);
 

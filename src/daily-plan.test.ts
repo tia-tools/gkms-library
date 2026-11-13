@@ -1,5 +1,5 @@
 import { describe as group, expect, test } from "bun:test";
-import { dailySteps, describe, failed, imagesIncomplete, imagesOf, publishedAnything, type Report } from "./daily-plan.ts";
+import { comparisonOutcome, dailySteps, describe, failed, imagesIncomplete, imagesOf, publishedAnything, type Report } from "./daily-plan.ts";
 
 const ADDRESS = "https://gkms-library.tia.run";
 const steps = (over: Partial<Parameters<typeof dailySteps>[0]> = {}) => dailySteps({ address: ADDRESS, dryRun: false, allowFewer: false, ...over });
@@ -104,5 +104,20 @@ group("the report", () => {
 
   test("a dry run says so", () => {
     expect(describe(report({ dryRun: true, newReleases: ["idols v1: 13"] })).title).toBe("Library update: dry run");
+  });
+});
+
+group("what the comparison found", () => {
+  test("nothing to say when it did not run; its differences when it ran to the end", () => {
+    expect(comparisonOutcome(false, false, [])).toBeNull();
+    expect(comparisonOutcome(true, true, [])).toEqual([]);
+    expect(comparisonOutcome(true, false, ["1 × support cards that differ"])).toEqual(["1 × support cards that differ"]);
+  });
+
+  test("a comparison that stopped without finishing is a failure of the report, never 'no difference'", () => {
+    const outcome = comparisonOutcome(true, false, []);
+    expect(outcome).toEqual(["the comparison stopped before it finished"]);
+    expect(failed(report({ unexpected: outcome }))).toBe(true);
+    expect(describe(report({ unexpected: outcome })).title).toBe("Library update: nothing new, comparison differs");
   });
 });

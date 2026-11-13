@@ -24,8 +24,15 @@ export const DEFAULT_ADDRESS = "https://gkms-library.tia.run";
 /** What this run uploaded, for the daily run's report; written beside the output directory, never published. */
 export const PUBLISH_SUMMARY = "publish-summary.json";
 
-/** Reads the pointer and every release it names back from the address: each must be the local text, pass its format and hash as named. */
-async function verify(address: string, out: string): Promise<void> {
+/**
+ * Reads back from the address everything a publication is made of: each format file must be the
+ * local text, the pointer the one just published, and every release it names must hash as named
+ * and pass its format.
+ */
+async function verify(address: string, out: string, formatFiles: readonly string[]): Promise<void> {
+  for (const name of formatFiles) {
+    if ((await readSiteText(address, `formats/${name}`)) !== readFileSync(join(out, "formats", name), "utf8")) throw new Error(`${address}/formats/${name} is not the format file in ${out}`);
+  }
   const text = await readSiteText(address, POINTER_PATH);
   if (text === null) throw new Error(`${address}/${POINTER_PATH} is not there after publication`);
   const pointer = parseLatest(JSON.parse(text));
@@ -66,8 +73,8 @@ async function main(argv: readonly string[]): Promise<void> {
     console.log("uploaded", upload.key);
   }
   if (dryRun) return;
-  await verify(address, out);
-  console.log(`${address}/${POINTER_PATH} and the ${pointer.files.length} release(s) it names read back and checked`);
+  await verify(address, out, formatFiles);
+  console.log(`${address}/${POINTER_PATH}, the ${pointer.files.length} release(s) it names and the ${formatFiles.length} format file(s) read back and checked`);
   writeIfDifferent(join(out, "..", PUBLISH_SUMMARY), `${JSON.stringify({ uploaded: uploads.map((u) => u.key) }, null, 2)}\n`);
 }
 

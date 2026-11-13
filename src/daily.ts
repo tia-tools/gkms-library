@@ -10,10 +10,10 @@
  * difference; the publication, once made, stands either way.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { hasFlag, option } from "./args.ts";
-import { dailySteps, describe, failed, imagesIncomplete, imagesOf, type ImagesSummary, type Report, type Step } from "./daily-plan.ts";
+import { comparisonOutcome, dailySteps, describe, failed, imagesIncomplete, imagesOf, type ImagesSummary, type Report, type Step } from "./daily-plan.ts";
 import { writeIfDifferent } from "./files.ts";
 import { GENERATE_SUMMARY } from "./generate.ts";
 import { DEFAULT_ADDRESS, PUBLISH_SUMMARY } from "./publish.ts";
@@ -41,7 +41,7 @@ function newReleases(): string[] {
   return Array.isArray(fresh) ? fresh.filter(isRecord).map((f) => `${String(f["format"])} v1: ${String(f["entries"])}`) : [];
 }
 
-function reportOf(failedStep: string | null, dryRun: boolean, compared: boolean): Report {
+function reportOf(failedStep: string | null, dryRun: boolean, compared: { ran: boolean; ok: boolean }): Report {
   const images: ImagesSummary = readJson("images-summary.json");
   return {
     failedStep,
@@ -49,7 +49,7 @@ function reportOf(failedStep: string | null, dryRun: boolean, compared: boolean)
     newReleases: newReleases(),
     published: strings(readJson(PUBLISH_SUMMARY)["uploaded"]),
     images: imagesOf(images),
-    unexpected: compared ? strings(readJson(COMPARE_SUMMARY)["unexpected"]) : null,
+    unexpected: comparisonOutcome(compared.ran, compared.ok, strings(readJson(COMPARE_SUMMARY)["unexpected"])),
   };
 }
 
@@ -73,12 +73,14 @@ async function main(argv: readonly string[]): Promise<void> {
   const dryRun = hasFlag(argv, "dry-run");
   if (hasFlag(argv, "check-images")) return checkImages(dryRun);
 
+  // Nothing an earlier run left may speak for this one: its report goes, and its steps' summaries are emptied.
+  rmSync(join(OUT, DAILY_SUMMARY), { force: true });
   for (const name of STEP_SUMMARIES) writeIfDifferent(join(OUT, name), "{}\n");
   let failedStep: string | null = null;
-  let compared = false;
+  const compared = { ran: false, ok: false };
   for (const step of dailySteps({ address: option(argv, "address", DEFAULT_ADDRESS), dryRun, allowFewer: hasFlag(argv, "allow-fewer") })) {
     const ok = await run(step);
-    if (step.name === "compare") compared = true;
+    if (step.name === "compare") Object.assign(compared, { ran: true, ok });
     if (!ok && step.stopsTheRun) {
       failedStep = step.name;
       break;

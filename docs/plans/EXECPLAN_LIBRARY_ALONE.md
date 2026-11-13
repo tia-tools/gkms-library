@@ -26,7 +26,8 @@ Each milestone is one issue and one branch, merged through a pull request into `
 - [x] (2026-11-12 21:04Z) Milestone 2 (#4): all 2,928 images the data names are extracted (none failed, none missing from the game) and uploaded, each master to `gkms-library-masters` and each public copy to `gkms-library`; a second plan finds nothing to upload; a master's name answers 404 at the public address; `bun run sync-masters` brought the 13 face masters and nothing on a second run. 55 Python tests pass, 28 mutations all caught. Complete once its pull request merges.
 - [x] (2026-11-13 02:35Z) Milestone 3 (#5), built: `bun run publish`, `bun run daily`, `compare --images`, `.github/workflows/update.yml` and the README. 168 tests, the type check and the lint pass; 26 mutations all caught; `bun run daily --dry-run` runs every step against the live address and would upload ten files.
 - [x] (2026-11-13 17:52Z) The user answered job #17 with A, and the data was published for the first time, by `bun run daily` on the owner's machine: five format files, four releases and the pointer, read back and checked. The five format files are now frozen, their hashes pinned by `formats/pinned.test.ts`. A second run found nothing to do; `bun run compare --site https://gkms-library.tia.run --images` reports no unexpected difference.
-- [ ] Milestone 3 (#5), remaining: the token and the two secrets (job #18); this milestone's pull request; the release merge of `develop` into `main`; a first run by hand on GitHub; two consecutive scheduled runs that succeed, with the Monday message; close-out.
+- [x] (2026-11-13 19:58Z) The user set the two secrets (job #18) and merged this milestone's pull request (#20) and the release of `develop` into `main` (#21). The first run on GitHub, started by hand (run 43496774597), succeeded in two and a half minutes: every format unchanged, all 2,928 images already served, nothing to upload, the comparison clean, and the notify job posted "Library update: nothing new" through nudge.
+- [ ] Milestone 3 (#5), remaining: two consecutive scheduled runs that succeed, with the Monday message; a run that uploads something, which is what proves the Cloudflare token (the first run had nothing to upload, so it made no authenticated call); close-out.
 
 ## Surprises & Discoveries
 
@@ -447,8 +448,17 @@ A second `bun run daily` printed `unchanged` for each format, `10 file(s) alread
 
 On GitHub, once the secrets exist and `main` holds the code:
 
-    gh workflow run update.yml
-    gh run watch
+    $ gh workflow run update.yml --ref develop
+    $ gh run watch 43496774597 --exit-status
+    update: success, notify: success (2026-11-13T19:55:45Z to 19:58:10Z)
+
+    idols v1: 13 idols of 25 rows — unchanged   (and the three other formats)
+    manifest 205100:0085: the data names 2928 image(s); 2928 served by https://gkms-library.tia.run; 0 to extract; 0 not offered by the game
+    10 file(s) already at https://gkms-library.tia.run, 0 to upload
+    no unexpected difference
+    Library update: nothing new
+
+That run uploaded nothing, so it made no call that needs the Cloudflare token: the token is proven by the first run that has something to upload, and a token that fails then fails the run before the pointer moves, which the notify job reports.
 
 ## Validation and Acceptance
 
@@ -584,3 +594,5 @@ Revision note, 2026-11-13 (#4, after a Codex review of Milestone 2's code): the 
 Revision note, 2026-11-13 (#5, Milestone 3 built, after a Codex review of its code): Progress splits Milestone 3 into what is built and what remains; one observation (scheduled runs start hours late here, and the `timezone` key works) and decisions L35 and L36 were added. Of the review's five findings three were fixed: a comparison that crashes is now a failure of the report, not "no difference"; the publication reads its format files back as well; and the daily run removes an earlier run's report before it starts. Two were answered. That a schedule's `timezone` key is invalid: gakumas-supportcards' workflow uses it and runs twice a day, at times that fit Japan time and cannot fit UTC. That a kept release written locally could differ from the address's: an entry is kept only when the content's SHA-256 equals the one the pointer names, and the publication refuses a file that differs anyway.
 
 Revision note, 2026-11-13 (#5, the first publication): Progress, Outcomes and Concrete Steps record it; the format files are frozen from now on and pinned by `formats/pinned.test.ts`.
+
+Revision note, 2026-11-13 (#5, the first run on GitHub): Progress and Concrete Steps record it, and that it could not prove the token, having nothing to upload.

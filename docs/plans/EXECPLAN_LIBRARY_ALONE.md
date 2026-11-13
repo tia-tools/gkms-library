@@ -24,7 +24,9 @@ Each milestone is one issue and one branch, merged through a pull request into `
 - [x] (2026-11-10 07:56Z) Milestone 0 (#2): the probe objects and `prototypes/` deleted; Milestone 0 is complete once its pull request merges.
 - [x] (2026-11-11 23:01Z) Milestone 1 (#3): `bun run generate` writes the four data files as releases with the pointer and the format files into `out/site/`; `bun run compare --site out/site` reports no unexpected difference from gakumas-supportcards' live files; 125 tests, the type check and the lint pass, and each new rule's test was seen to fail with the rule broken (37 mutations, all caught). Complete once its pull request merges.
 - [x] (2026-11-12 21:04Z) Milestone 2 (#4): all 2,928 images the data names are extracted (none failed, none missing from the game) and uploaded, each master to `gkms-library-masters` and each public copy to `gkms-library`; a second plan finds nothing to upload; a master's name answers 404 at the public address; `bun run sync-masters` brought the 13 face masters and nothing on a second run. 55 Python tests pass, 28 mutations all caught. Complete once its pull request merges.
-- [ ] Milestone 3 (#5): the daily run publishes both; the comparison check runs in it; failures reach Discord; two consecutive unattended runs succeed.
+- [x] (2026-11-13 02:35Z) Milestone 3 (#5), built: `bun run publish`, `bun run daily`, `compare --images`, `.github/workflows/update.yml` and the README. 168 tests, the type check and the lint pass; 26 mutations all caught; `bun run daily --dry-run` runs every step against the live address and would upload ten files.
+- [x] (2026-11-13 17:52Z) The user answered job #17 with A, and the data was published for the first time, by `bun run daily` on the owner's machine: five format files, four releases and the pointer, read back and checked. The five format files are now frozen, their hashes pinned by `formats/pinned.test.ts`. A second run found nothing to do; `bun run compare --site https://gkms-library.tia.run --images` reports no unexpected difference.
+- [ ] Milestone 3 (#5), remaining: the token and the two secrets (job #18); this milestone's pull request; the release merge of `develop` into `main`; a first run by hand on GitHub; two consecutive scheduled runs that succeed, with the Monday message; close-out.
 
 ## Surprises & Discoveries
 
@@ -75,6 +77,9 @@ Each milestone is one issue and one branch, merged through a pull request into `
 
 - Observation: every image the data names is offered by the game today: of 2,928, none was missing from the manifest (`205100:0085`) and none failed to decode, the `sup` and `acc` skill card icons included. The masters are 375 MB, the public copies 13 MB.
   Evidence: `uv run extract.py --all`: `converted 2899 of 2899` after a sample of 29; `out/images-summary.json`.
+
+- Observation: a scheduled run on this account starts hours after its time. gakumas-supportcards' runs, set for 11:30 and 20:30 Japan time, started between 18:40 and 19:10 and between 03:45 and 04:05 Japan time on 2026-11-10 to 11-12, six and a half to seven and a half hours late, every one succeeding. Those times also show that the `timezone` key of a schedule is accepted and applied: read as UTC, the same crons would have had to start an hour and a half early.
+  Evidence: `gh run list -R tia-tools/gakumas-supportcards --workflow update-data.yml`: `schedule 2026-11-12T10:00:15Z`, `2026-11-12T19:01:48Z`, and four more like them. Consequence: L25's "twenty minutes after gakumas-supportcards' runs" is a nominal order, not a guarantee; the comparison does not depend on it, since a support card only the library has is expected (L26).
 
 - Observation: the icons of the skill cards left out of today's pool have names the image pipeline does not recognise. Its pattern accepts the kinds `act`, `men` and `ido`; the complete table also has `sup` (236 rows, the cards support cards' events give) and `acc` (1 row).
   Evidence: `SKILLCARD_OBJECT_NAME` in gakumas-supportcards' `scripts/images/thumbnail.py`, against the `assetId` values of `ProduceCard`. Consequence: Milestone 2 widens the pattern, and stops when the data names an image no pattern matches.
@@ -231,6 +236,14 @@ The decisions are numbered L1, L2, … Decisions that outlive this plan are also
   Rationale: not intended: the copied lock was deleted while renaming the project. The fresh resolution is what extracted and decoded all 2,928 images, so it is the proven one here.
   Date/Author: 2026-11-13, agent.
 
+- Decision: L35 — `compare --images` asks only the library's address, for the card art and item icons gakumas-supportcards' data names, and does not ask that site whether it serves them.
+  Rationale: the question is whether the library lacks something; asking the other site as well would be about 270 requests to its Worker twice a day, which count toward the daily limit this design exists to leave.
+  Date/Author: 2026-11-13, agent.
+
+- Decision: L36 — `bun run generate` writes every release the pointer names into the output directory, not only the new ones.
+  Rationale: on a runner the directory starts empty, and the image steps and the publication read the releases from it; a kept release has the same hash as before, hence the same bytes.
+  Date/Author: 2026-11-13, agent.
+
 ## Outcomes & Retrospective
 
 Milestone 0 (2026-11-10): both of its questions were answered as the design hoped, the address serving without a Worker and cache hits costing no read, and Valibot was chosen at 1.7 KB. One step was dropped, the Cache Rule (L29). A Codex review was what made the cache-hit proof clean: the first measurement had reads it could not account for.
@@ -238,6 +251,8 @@ Milestone 0 (2026-11-10): both of its questions were answered as the design hope
 Milestone 1 (2026-11-11): the generator, the formats and the comparison exist, and the comparison passes on real data: every support card, skill card, idol and H.I.F. ability gakumas-supportcards publishes is in the library's files and equal, with 1,456 skill card rows and 470 memory abilities only the library has. The copied code needed three real changes (unread effects, scenario tokens, every released row); the rest is new and small. What remains for the plan's purpose: the images (Milestone 2) and publication (Milestone 3).
 
 Milestone 2 (2026-11-13): the address serves an image for everything the data names, 2,928 in all, and the private bucket holds each one's master. The public address therefore holds images before it holds data, which L22 allows: nothing names them yet. The pipeline is gakumas-supportcards' with its sheets removed, its naming widened to every skill card, and what is stored asked of the library's own address. What remains: publishing the data and the unattended run (Milestone 3).
+
+Milestone 3, the first publication (2026-11-13): the library's address now serves what the plan's purpose names: a pointer, the four releases it names, the five format files, and the 2,928 images those releases name; the comparison with gakumas-supportcards, images included, reports no unexpected difference; no app has changed. What remains is for the run to happen with no person involved: the token, the release into `main`, and the scheduled runs themselves.
 
 ## Context and Orientation
 
@@ -406,13 +421,34 @@ Milestone 2, in `images/`, as run on 2026-11-13:
 
 `--site out/site` is needed until Milestone 3 publishes the data; after that the command reads the public address by default. At the address: `img/w192/img_general_csprt-3-0110_full.webp`, `img/w48/img_general_pitem_2-004.webp`, `img/w112/img_sd_hski_face-00.webp` and `img/w112/img_general_skillcard_act-2_009-hski.webp` each answer 200 `image/webp` with `cache-control: public, max-age=31536000, immutable`, and `img_sd_hski_face-00.webp`, a master's name, answers 404.
 
-Milestone 3:
+Milestone 3. The first publication, as run on 2026-11-13 on the owner's machine with the Wrangler login:
 
-    bun run daily -- --dry-run
+    $ bun run daily
+    == generate: bun src/generate.ts --previous https://gkms-library.tia.run
+    idols v1: 13 idols of 25 rows — new release 20261113T1751Z-001d92d5
+    items v1: 1104 items of 1104 rows — new release 20261113T1751Z-f87c4c94
+    skill-cards v1: 1817 cards (476 ids) of 1817 rows, 585 abilities of 585 rows — new release 20261113T1751Z-0259401d
+    support-cards v1: 212 cards of 212 rows, 0 unread — new release 20261113T1751Z-0513c9bc
+    == extract images: uv run extract.py --base-url https://gkms-library.tia.run
+    manifest 205100:0085: the data names 2928 image(s); 2928 served by https://gkms-library.tia.run; 0 to extract; 0 not offered by the game
+    == check the images are complete: bun src/daily.ts --check-images
+    every image the data names and the game offers is stored
+    == publish: bun src/publish.ts --address https://gkms-library.tia.run
+    0 file(s) already at https://gkms-library.tia.run, 10 to upload
+    uploaded formats/idols.v1.ts
+    … (four more format files, four releases)
+    uploaded data/latest.v1.json
+    https://gkms-library.tia.run/data/latest.v1.json, the 4 release(s) it names and the 5 format file(s) read back and checked
+    == compare: bun src/compare/main.ts --site out/site --images --address https://gkms-library.tia.run --summary out/compare-summary.json
+    no unexpected difference
+    Library update: published
+
+A second `bun run daily` printed `unchanged` for each format, `10 file(s) already at …, 0 to upload` and `Library update: nothing new`. `bun run daily --dry-run` does everything but upload and prints what it would send. At the address, the pointer answers `application/json` with `cache-control: public, max-age=300`, a release `application/json` and a format file `text/plain; charset=utf-8`, both immutable, and `formats/idols.v1.ts` is byte for byte the repository's file.
+
+On GitHub, once the secrets exist and `main` holds the code:
+
     gh workflow run update.yml
     gh run watch
-
-`--dry-run` does everything but upload and prints what it would write.
 
 ## Validation and Acceptance
 
@@ -519,7 +555,7 @@ Functions that must exist at the end of Milestone 1:
     export function compare(theirs: Theirs, ours: Ours): Difference[]
     export interface Difference { kind: "expected" | "unexpected"; name: string; count: number; examples: readonly string[] }
 
-The commands: `bun run generate [--previous <directory or address>] [--allow-fewer]`; `bun run compare --site <directory or address> [--theirs <directory or address>] [--images]` (`--images` from Milestone 3); `bun run publish [--dry-run]`; `bun run daily [--dry-run] [--allow-fewer]`; `bun run sync-masters -- --dest <directory> [--only <regular expression>]`; in `images/`, `uv run extract.py [--site <directory or address>] [--all] [--only <regular expression>] [--force]` and `uv run upload.py [--site <directory or address>] [--dry-run] [--assume-empty] [--jobs <n>]`, `--site` being `out/site` by default.
+The commands: `bun run generate [--previous <directory or address>] [--allow-fewer]`; `bun run compare --site <directory or address> [--theirs <directory or address>] [--images]` (`--images` from Milestone 3); `bun run publish [--out <directory>] [--address <address>] [--dry-run]`; `bun run daily [--dry-run] [--allow-fewer] [--address <address>]`; `bun run sync-masters -- --dest <directory> [--only <regular expression>]`; in `images/`, `uv run extract.py [--site <directory or address>] [--all] [--only <regular expression>] [--force]` and `uv run upload.py [--site <directory or address>] [--dry-run] [--assume-empty] [--jobs <n>]`, `--site` being `out/site` by default.
 
 Dependencies: Bun 1.4.3 (L30), TypeScript 7, Oxlint with tsgolint, `js-yaml`, and Valibot 1 (L28), which each app will also need at the same major version to use a copied format file; Python 3.11 or 3.12 with uv, Pillow, UnityPy 1.10.18 or older, and GkmasObjectManager at a pinned commit, fetched and never committed (GPL-3.0; it is run, not distributed); Wrangler 4 through `bunx`; the GitHub Actions `actions/checkout`, `oven-sh/setup-bun`, `astral-sh/setup-uv` and `Taka499/nudge/actions/notify`, each pinned to a commit as in gakumas-supportcards' workflows.
 
@@ -544,3 +580,7 @@ Revision note, 2026-11-12 (#3, after a Codex review of Milestone 1's code): a re
 Revision note, 2026-11-13 (#4, Milestone 2 done): Progress, Concrete Steps (the real transcript), Outcomes and the image counts were updated; two observations and decisions L33 (the sync command is Python) and L34 (the lock file was resolved afresh) were added.
 
 Revision note, 2026-11-13 (#4, after a Codex review of Milestone 2's code): the summary file could excuse a missing image wrongly, by a list left from an earlier run, from other data, or from a run over a part of the images, and `--limit` could leave images out while both commands exited 0. Now every extraction starts the summary anew, it records which set of names it is about and whether the run looked at all of them, `upload.py` accepts its `not_offered` list only then, and both commands record whether they were complete; Milestone 3's `daily` is to stop on an incomplete one. About 2.6 % of the first upload's puts (148 of 5,756) failed once and passed on the retry.
+
+Revision note, 2026-11-13 (#5, Milestone 3 built, after a Codex review of its code): Progress splits Milestone 3 into what is built and what remains; one observation (scheduled runs start hours late here, and the `timezone` key works) and decisions L35 and L36 were added. Of the review's five findings three were fixed: a comparison that crashes is now a failure of the report, not "no difference"; the publication reads its format files back as well; and the daily run removes an earlier run's report before it starts. Two were answered. That a schedule's `timezone` key is invalid: gakumas-supportcards' workflow uses it and runs twice a day, at times that fit Japan time and cannot fit UTC. That a kept release written locally could differ from the address's: an entry is kept only when the content's SHA-256 equals the one the pointer names, and the publication refuses a file that differs anyway.
+
+Revision note, 2026-11-13 (#5, the first publication): Progress, Outcomes and Concrete Steps record it; the format files are frozen from now on and pinned by `formats/pinned.test.ts`.

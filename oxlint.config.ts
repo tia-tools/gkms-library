@@ -52,5 +52,11 @@ export default defineConfig({
       files: ["src/**/*.ts"],
       rules: { "security/detect-non-literal-fs-filename": "off" },
     },
+    {
+      // formats/pinned.test.ts hashes each published format file, reading it by a name from its own
+      // fixed list beside it. No path comes from outside input. Remove if that test stops reading files.
+      files: ["formats/**/*.test.ts"],
+      rules: { "security/detect-non-literal-fs-filename": "off" },
+    },
   ],
 });

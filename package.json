@@ -6,10 +6,12 @@
   "scripts": {
     "generate": "bun src/generate.ts",
     "compare": "bun src/compare/main.ts",
+    "publish": "bun src/publish.ts",
+    "daily": "bun src/daily.ts",
+    "sync-masters": "uv run --project images images/sync_masters.py",
     "test": "bun test",
     "type-check": "tsc --noEmit",
-    "lint": "oxlint --deny-warnings",
-    "sync-masters": "uv run --project images images/sync_masters.py"
+    "lint": "oxlint --deny-warnings"
   },
   "dependencies": {
     "js-yaml": "^5.5.0",

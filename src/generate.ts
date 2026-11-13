@@ -22,6 +22,8 @@ import { POINTER_PATH, readPointer } from "./site.ts";
 import { loadItemFacts, loadSkillCardTables, loadTables } from "./tables.ts";
 
 const FORMATS_DIR = join(import.meta.dirname, "..", "formats");
+/** What this run did, for the daily run's report; written beside the output directory, never published. */
+export const GENERATE_SUMMARY = "generate-summary.json";
 
 /** Copies the format files (not their tests) to `<out>/formats/`, as they are published beside the data. */
 function copyFormats(out: string): void {
@@ -47,8 +49,10 @@ async function main(argv: readonly string[]): Promise<void> {
   }
 
   // Every text exists before the first write; the pointer goes last.
-  const { pointer, fresh } = nextPointer(previous, all.built, now);
-  for (const f of fresh) writeRelease(join(out, f.entry.path), f.text);
+  // Every release the pointer names is written here, new or not, so the directory is a whole
+  // mirror of what the pointer names: the image steps and the publication read it.
+  const { pointer, fresh, named } = nextPointer(previous, all.built, now);
+  for (const f of named) writeRelease(join(out, f.entry.path), f.text);
   copyFormats(out);
   const pointerMoved = writeIfDifferent(join(out, POINTER_PATH), pointerText(pointer));
 
@@ -59,6 +63,7 @@ async function main(argv: readonly string[]): Promise<void> {
   }
   for (const u of all.unread) console.log(`  UNREAD ${u.cardId} ${u.cardName} — ${u.reason}`);
   console.log(pointerMoved ? `wrote ${join(out, POINTER_PATH)}` : "pointer unchanged");
+  writeIfDifferent(join(out, "..", GENERATE_SUMMARY), `${JSON.stringify({ lines: all.lines, fresh: fresh.map((f) => ({ format: f.format, release: f.entry.release, entries: f.entries })), unread: all.unread.length }, null, 2)}\n`);
 }
 
 if (import.meta.main) {

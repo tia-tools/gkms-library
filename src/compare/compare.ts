@@ -192,3 +192,21 @@ export function compare(theirs: Theirs, ours: Ours): Difference[] {
     ...grantedItems(theirs.cards, ours),
   ];
 }
+
+/**
+ * Where the library serves the card art and the item icon of everything gakumas-supportcards' data
+ * names: the same file names that site serves under its own `/img/w192/` and `/img/w48/`.
+ */
+export function theirImagePaths(theirs: TheirCards): string[] {
+  const paths = new Set<string>();
+  for (const card of theirs.cards) {
+    paths.add(`img/w192/img_general_${card.assetId}_full.webp`);
+    for (const grant of card.items ?? []) paths.add(`img/w48/${grant.assetId}.webp`);
+  }
+  return [...paths].sort();
+}
+
+/** An image gakumas-supportcards' data names that the library's address does not serve is unexpected. */
+export function missingImages(notServed: readonly string[]): Difference[] {
+  return difference("unexpected", "images that site's data names and the library does not serve", notServed);
+}

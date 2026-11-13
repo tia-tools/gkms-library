@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { SkillCard } from "../../formats/skill-cards.v1.ts";
 import type { Card } from "../../formats/support-cards.v1.ts";
-import { canonical, compare, type Difference, type Ours, type Theirs } from "./compare.ts";
+import { canonical, compare, type Difference, missingImages, type Ours, theirImagePaths, type Theirs } from "./compare.ts";
 
 const HIF = "produce_group-003";
 const LIMITS = { r: [20, 25, 30, 35, 40], sr: [30, 35, 40, 45, 50], ssr: [40, 45, 50, 55, 60] } satisfies Ours["supportCards"]["levelLimits"];
@@ -175,5 +175,18 @@ describe("compare", () => {
     });
     expect(d?.count).toBe(7);
     expect(d?.examples).toHaveLength(5);
+  });
+});
+
+describe("the images their data names", () => {
+  test("are each card's art and each granted item's icon, once, under the names that site serves them by", () => {
+    const { theirs } = sites();
+    theirs.cards.cards.push(supportCard("s_card-3-0002"));
+    expect(theirImagePaths(theirs.cards)).toEqual(["img/w192/img_general_csprt-3-0001_full.webp", "img/w192/img_general_csprt-3-0002_full.webp", "img/w48/img_general_pitem_9-999.webp"]);
+  });
+
+  test("one the library does not serve is unexpected; none missing is no difference", () => {
+    expect(missingImages(["img/w48/img_general_pitem_9-999.webp"])).toEqual([{ kind: "unexpected", name: "images that site's data names and the library does not serve", count: 1, examples: ["img/w48/img_general_pitem_9-999.webp"] }]);
+    expect(missingImages([])).toEqual([]);
   });
 });

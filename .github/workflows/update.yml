@@ -1,0 +1,117 @@
+# Guards: what the library publishes, during a run nobody watches. Twice a day it generates the data
+# from the game's tables, extracts and uploads the images that data names, publishes the data at
+# https://gkms-library.tia.run, and compares the result with what gakumas-supportcards publishes.
+# The whole run is one command, `bun run daily` (src/daily.ts; its order and why are in
+# src/daily-plan.ts, pinned by src/daily-plan.test.ts): everything is built and checked before the
+# first upload, each image's master goes before its public copy, the data goes out only when the
+# images are complete, and the pointer, the one file an app follows, moves last. A step that fails
+# leaves the pointer naming the last good releases.
+#
+# The schedule runs this file from `develop`, the default branch, because GitHub runs schedules only
+# from there; the code it runs is `main`, the released branch (plan decision L25). Keep this file to
+# setup, that one command and the report, so that almost nothing here can disagree with `main`.
+# Nothing is committed: what is released is recorded at the address itself, in the pointer.
+#
+# The last job, notify, posts to the owner's Discord through Nudge (github.com/Taka499/nudge; an
+# OIDC token, no stored secret) when the run failed or was cancelled, when the comparison found an
+# unexpected difference (which fails the run after its publication), when anything was published,
+# when the run was started by hand, and on Monday mornings regardless: this run commits nothing, so
+# GitHub will disable its schedule after 60 days without other activity in the repository, and a
+# Monday without that message is how a stopped schedule is noticed. It is a job of its own so that
+# it is the only one that can mint an OIDC token, and the only one without the Cloudflare token.
+name: Update
+
+on:
+  schedule:
+    # Daily 11:50 and 20:50 JST: twenty minutes after gakumas-supportcards' own runs (11:30 and
+    # 20:30), so that the comparison sees what that site has just deployed. The time zone is stated
+    # rather than left to the UTC default.
+    - cron: "50 11 * * *"
+      timezone: "Asia/Tokyo"
+    - cron: "50 20 * * *"
+      timezone: "Asia/Tokyo"
+  workflow_dispatch:
+    inputs:
+      allow-fewer:
+        description: "Publish even if a format lists fewer entries than its last release (a real removal in the game)"
+        type: boolean
+        default: false
+
+# Nothing by default; each job states what it needs.
+permissions: {}
+
+concurrency:
+  group: update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      title: ${{ steps.report.outputs.title }}
+      body: ${{ steps.report.outputs.body }}
+      published: ${{ steps.report.outputs.published }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.4.3"
+      - run: bun install --frozen-lockfile
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+
+      - name: Generate, extract, upload, publish, compare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ALLOW_FEWER: ${{ inputs.allow-fewer }}
+        run: |
+          if [ "$ALLOW_FEWER" = "true" ]; then
+            bun run daily --allow-fewer
+          else
+            bun run daily
+          fi
+
+      # Whatever happened above: the summary the run wrote, or the fact that it wrote none.
+      - name: Describe the run
+        id: report
+        if: always()
+        run: |
+          if [ -f out/daily-summary.json ]; then
+            title=$(jq -r .title out/daily-summary.json)
+            published=$(jq -r .published out/daily-summary.json)
+            jq -r .body out/daily-summary.json > "$RUNNER_TEMP/body.txt"
+          else
+            title="Library update: failed before the run could describe itself"
+            published=false
+            echo "Nothing was published; the pointer still names the last good releases." > "$RUNNER_TEMP/body.txt"
+          fi
+          {
+            echo "title=$title"
+            echo "published=$published"
+            echo "body<<END_OF_BODY"
+            cat "$RUNNER_TEMP/body.txt"
+            echo "END_OF_BODY"
+          } >> "$GITHUB_OUTPUT"
+
+  notify:
+    needs: update
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      # 1 is Monday, in Japan, where the schedule is set.
+      - name: Which weekday is it?
+        id: when
+        run: echo "weekday=$(TZ=Asia/Tokyo date +%u)" >> "$GITHUB_OUTPUT"
+      - name: Tell Discord how it went
+        if: needs.update.result != 'success' || needs.update.outputs.published == 'true' || github.event_name == 'workflow_dispatch' || (github.event.schedule == '50 11 * * *' && steps.when.outputs.weekday == '1')
+        uses: Taka499/nudge/actions/notify@d9f7f1ac185050506d526532a0e24861564422cf # v1.1.0
+        with:
+          endpoint: https://nudge.tia.run
+          title: "${{ needs.update.outputs.title || 'Library update' }} (run ${{ needs.update.result }})"
+          body: ${{ needs.update.outputs.body || 'The run left no description.' }}

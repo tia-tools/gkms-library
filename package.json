@@ -1,0 +1,28 @@
+{
+  "name": "gkms-library",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "bun src/generate.ts",
+    "compare": "bun src/compare/main.ts",
+    "publish": "bun src/publish.ts",
+    "daily": "bun src/daily.ts",
+    "sync-masters": "uv run --project images images/sync_masters.py",
+    "test": "bun test",
+    "type-check": "tsc --noEmit",
+    "lint": "oxlint --deny-warnings"
+  },
+  "dependencies": {
+    "js-yaml": "^5.5.0",
+    "valibot": "^1.5.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.4",
+    "@types/js-yaml": "^4.0.9",
+    "eslint-plugin-security": "^4.2.1",
+    "oxlint": "^1.93.0",
+    "oxlint-tsgolint": "^7.0.2006",
+    "typescript": "^7.0.2"
+  }
+}

@@ -102,10 +102,19 @@ export const realIo: Io = {
   now: () => new Date(),
 };
 
-/** What went wrong, for the log; the body's first line is R2's own error code when it gives one. */
-async function failure(response: Response): Promise<string> {
-  const text = (await response.text()).replace(/\s+/g, " ").slice(0, 300);
-  return `${response.status}${text === "" ? "" : `: ${text}`}`;
+/**
+ * What went wrong, for the log: the HTTP status and R2's error code, nothing else. The body is not
+ * echoed, since an S3 error body can carry request details such as the access key id, and an
+ * exception's message can carry the endpoint, which names the account.
+ */
+export async function failure(response: Response): Promise<string> {
+  const code = /<Code>([A-Za-z0-9]{1,64})<\/Code>/.exec(await response.text())?.[1];
+  return code === undefined ? `${response.status}` : `${response.status} ${code}`;
+}
+
+export function thrown(e: unknown): string {
+  const code = typeof e === "object" && e !== null && "code" in e && typeof e.code === "string" && /^[A-Za-z0-9_]{1,64}$/.test(e.code) ? ` ${e.code}` : "";
+  return `request failed (${e instanceof Error ? e.name : "error"}${code})`;
 }
 
 /** One attempt; resolves to undefined when it worked, or to what failed. */
@@ -121,7 +130,7 @@ export async function putOnce(request: PutRequest, bucket: string, io: Io): Prom
     const response = await io.fetch(http.url, { method: http.method, headers: http.headers, body });
     return response.ok ? undefined : await failure(response);
   } catch (e) {
-    return e instanceof Error ? e.message : String(e);
+    return thrown(e);
   }
 }
 
@@ -138,7 +147,7 @@ export async function getOnce(bucket: string, key: string, file: string, io: Io)
     await io.writeFile(file, new Uint8Array(await response.arrayBuffer()));
     return undefined;
   } catch (e) {
-    return e instanceof Error ? e.message : String(e);
+    return thrown(e);
   }
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { getOnce, type Io, put, putCommand, type PutRequest, RETRY_WAITS_MS, s3AccessFrom, s3PutRequest } from "./r2.ts";
+import { failure, getOnce, type Io, put, putCommand, type PutRequest, RETRY_WAITS_MS, s3AccessFrom, s3PutRequest, thrown } from "./r2.ts";
 import { sha256Hex } from "./sigv4.ts";
 
 const REQUEST: PutRequest = { key: "data/latest.v1.json", file: "out/site/data/latest.v1.json", contentType: "application/json", cacheControl: "public, max-age=300" };
@@ -104,7 +104,7 @@ describe("put", () => {
 
     test(`${way}: a put that keeps failing throws after its last attempt, with the last reason`, async () => {
       const w = world(env, 99);
-      const reason = way === "S3" ? "500: <Error><Code>InternalError</Code></Error>" : "exit 1";
+      const reason = way === "S3" ? "500 InternalError" : "exit 1";
       expect(put(REQUEST, undefined, w.io, w.sleep)).rejects.toThrow(`put data/latest.v1.json failed (${reason}) after 3 attempts`);
       await Promise.resolve();
       expect(w.seen.commands.length + w.seen.requests.length).toBeLessThanOrEqual(RETRY_WAITS_MS.length + 1);
@@ -130,5 +130,20 @@ describe("getOnce", () => {
     const w = world({}, 0);
     await getOnce("gkms-library-masters", "x.webp", "out/masters/x.webp", w.io);
     expect(w.seen.commands).toEqual([["bunx", "wrangler", "r2", "object", "get", "gkms-library-masters/x.webp", "--file", "out/masters/x.webp", "--remote"]]);
+  });
+});
+
+describe("what a failure logs", () => {
+  test("the status and R2's error code only: never the body, which can carry the access key id", async () => {
+    const body = "<Error><Code>SignatureDoesNotMatch</Code><AWSAccessKeyId>key-id</AWSAccessKeyId><StringToSign>AWS4-HMAC-SHA256 secret-ish</StringToSign></Error>";
+    expect(await failure(new Response(body, { status: 403 }))).toBe("403 SignatureDoesNotMatch");
+    expect(await failure(new Response("not xml at all, key-id", { status: 502 }))).toBe("502");
+  });
+
+  test("an exception gives its kind and code, never its message, which can name the account's endpoint", () => {
+    const e = Object.assign(new TypeError(`fetch to https://${ACCOUNT}.r2.cloudflarestorage.com failed`), { code: "ConnectionRefused" });
+    expect(thrown(e)).toBe("request failed (TypeError ConnectionRefused)");
+    expect(thrown(Object.assign(new Error("x"), { code: `https://${ACCOUNT}` }))).toBe("request failed (Error)");
+    expect(thrown("a string")).toBe("request failed (error)");
   });
 });

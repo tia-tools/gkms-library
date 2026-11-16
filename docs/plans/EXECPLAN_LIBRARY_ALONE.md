@@ -27,6 +27,7 @@ Each milestone is one issue and one branch, merged through a pull request into `
 - [x] (2026-11-13 02:35Z) Milestone 3 (#5), built: `bun run publish`, `bun run daily`, `compare --images`, `.github/workflows/update.yml` and the README. 168 tests, the type check and the lint pass; 26 mutations all caught; `bun run daily --dry-run` runs every step against the live address and would upload ten files.
 - [x] (2026-11-13 17:52Z) The user answered job #17 with A, and the data was published for the first time, by `bun run daily` on the owner's machine: five format files, four releases and the pointer, read back and checked. The five format files are now frozen, their hashes pinned by `formats/pinned.test.ts`. A second run found nothing to do; `bun run compare --site https://gkms-library.tia.run --images` reports no unexpected difference.
 - [x] (2026-11-13 19:58Z) The user set the two secrets (job #18) and merged this milestone's pull request (#20) and the release of `develop` into `main` (#21). The first run on GitHub, started by hand (run 43496774597), succeeded in two and a half minutes: every format unchanged, all 2,928 images already served, nothing to upload, the comparison clean, and the notify job posted "Library update: nothing new" through nudge.
+- [x] (2026-11-16 11:20Z) The first scheduled run with something to upload (run 43846565276, 10:11Z) failed at "upload images": new releases of all four formats and 153 new images were built, but every put to `gkms-library-masters` was refused (403, Cloudflare code 10000), so nothing was uploaded and the pointer still names the last good releases. The token as L27 specified it cannot upload through Wrangler (Surprises & Discoveries). The user answered job #25 with C (L37): the token gets account-wide storage write now (job #24), and #26 narrows it back to the two buckets. #22 adds a weekly expiry check and #23 the race between parallel Wrangler installs.
 - [ ] Milestone 3 (#5), remaining: two consecutive scheduled runs that succeed, with the Monday message; a run that uploads something, which is what proves the Cloudflare token (the first run had nothing to upload, so it made no authenticated call); close-out.
 
 ## Surprises & Discoveries
@@ -96,6 +97,9 @@ Each milestone is one issue and one branch, merged through a pull request into `
 
 - Observation: GitHub runs a scheduled workflow only from the repository's default branch, which here is `develop` so that a pull request's `Closes #N` closes its issue; and it disables schedules in a public repository after 60 days without activity. gakumas-supportcards avoids both because its default branch is production and its run commits data; the library's run commits nothing.
   Evidence: the comments of gakumas-supportcards' `update-data.yml` and its ADR 0008; `CLAUDE.md` § Tasks here. Consequence: L25.
+
+- Observation: a Cloudflare token holding only the object-level permissions "Workers R2 Storage Bucket Item Write" and "… Item Read" on named buckets cannot upload through Wrangler. `wrangler r2 object put` calls Cloudflare's main API (`api.cloudflare.com/…/r2/buckets/<bucket>/objects/<key>`), which refuses such a token with 403 and `{"code":10000,"message":"Authentication error"}`, even though Wrangler accepts the token and names the right account. Object-level tokens work only through R2's S3-compatible API, which signs requests with an access key id and secret. gakumas-supportcards' token never hit this because it holds the account-wide "Workers R2 Storage" permission; the library's first publication used the owner's Wrangler login.
+  Evidence: run 43846565276 (2026-11-16), 36 puts to `gkms-library-masters`, all refused that way; the token's permission policy as the user showed it; Cloudflare's R2 troubleshooting page § Object-level API tokens fail against the REST API (read 2026-11-16); cloudflare/workers-sdk#9235, closed as intended behaviour. Consequence: L37.
 
 ## Decision Log
 
@@ -244,6 +248,10 @@ The decisions are numbered L1, L2, … Decisions that outlive this plan are also
 - Decision: L36 — `bun run generate` writes every release the pointer names into the output directory, not only the new ones.
   Rationale: on a runner the directory starts empty, and the image steps and the publication read the releases from it; a kept release has the same hash as before, hence the same bytes.
   Date/Author: 2026-11-13, agent.
+
+- Decision: L37 — the unattended run's token holds account-wide R2 storage write for now, replacing L27's limit to the two buckets, so that the data waiting since 2026-11-16 publishes; #26 then narrows it back to the two buckets by moving the uploads from Wrangler to R2's S3-compatible API, and the account-wide permission is taken off.
+  Rationale: L27's token cannot upload through Wrangler (Surprises & Discoveries, 2026-11-16). Of the user's options in job #25 — account-wide only, the S3-compatible API only (about half a day before anything publishes), or the first now and the second next — the third unblocks the data at once and keeps L27's reason in sight: the update job holds this token beside third-party code (GkmasObjectManager, UnityPy, Wrangler), and an account-wide token can write every bucket of the account, the apps' shared bucket included.
+  Date/Author: 2026-11-16, user (job #25, answer C).
 
 ## Outcomes & Retrospective
 
@@ -596,3 +604,5 @@ Revision note, 2026-11-13 (#5, Milestone 3 built, after a Codex review of its co
 Revision note, 2026-11-13 (#5, the first publication): Progress, Outcomes and Concrete Steps record it; the format files are frozen from now on and pinned by `formats/pinned.test.ts`.
 
 Revision note, 2026-11-13 (#5, the first run on GitHub): Progress and Concrete Steps record it, and that it could not prove the token, having nothing to upload.
+
+Revision note, 2026-11-16 (#5, the first run that uploads): Progress, Surprises and decision L37 record that the bucket-limited token of L27 cannot upload through Wrangler, and the user's answer to job #25.

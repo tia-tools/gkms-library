@@ -65,6 +65,8 @@ Bun 1.4.3 for the data, Python with uv for the images.
 
 `bun run daily` is what `.github/workflows/update.yml` runs at 11:50 and 20:50 Japan time: generate, the images, the publication, the comparison. Everything is built and checked before the first upload, the data goes out only when its images are stored, and the pointer moves last, so a run that fails leaves the last good releases in place. The workflow file is on `develop`; the code it runs is `main`.
 
+`.github/workflows/cloudflare-token.yml` checks every Monday at 09:17 Japan time that the Cloudflare token those uploads use is not about to expire. It posts to Discord through nudge: a warning every week from 30 days before the expiry date, a failed run if Cloudflare refuses the token, and otherwise one OK line in the first week of each month.
+
 `bun run sync-masters` brings the lossless masters to a directory, for an app that builds its own images from the game's art.
 
 The plan this was built by, with every decision and what was measured, is `docs/plans/EXECPLAN_LIBRARY_ALONE.md`.

@@ -8,8 +8,8 @@ master to the private bucket, then its public copy to the public one.
 
 "Missing" is asked of the public address (stored.py), so planning needs no credentials. The master
 goes first, so a public copy that is served implies a stored master. The upload itself goes through
-`wrangler r2 object put` (r2.py), with the Wrangler login locally or CLOUDFLARE_API_TOKEN in an
-unattended run. An image that is missing and not on disk stops the run before anything is uploaded,
+r2.py: R2's S3-compatible API with the key pair in R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY in an
+unattended run, or else Wrangler with this machine's login. An image that is missing and not on disk stops the run before anything is uploaded,
 unless extract.py, run on the same data and over all of it, recorded that the game does not offer it
 (docs/plans/EXECPLAN_LIBRARY_ALONE.md, L23). The summary's `upload_complete` says whether every image
 the data names and the game offers is now stored; a run cut short by --limit says false.

@@ -1,0 +1,35 @@
+# Guards: the Cloudflare token's expiry. update.yml uploads the library's images and data with the
+# token in the secret CLOUDFLARE_API_TOKEN, and a token made with an expiry date stops working on
+# that date. update.yml uses the token only when there is something to upload, so a run with nothing
+# new never notices; the first run with new data would then fail on the day an update is due.
+# Every Monday, Nudge's cloudflare-token action sends that token to Cloudflare's verify endpoint,
+# never to Nudge, and posts to the owner's Discord through Nudge (an OIDC token, no stored secret):
+# a warning on every run from 30 days before the expiry date; "Cloudflare rejected the token" or
+# "Cloudflare token check failed" with a failed run; otherwise one "Cloudflare token OK" line in the
+# first week of each month, so a month without it means this schedule stopped
+# (github.com/Taka499/nudge, README § Warn before a Cloudflare token expires). The account id makes
+# Cloudflare verify the token under its account, as an account-owned token.
+name: Cloudflare token
+
+on:
+  schedule:
+    # Mondays 09:17 JST: off the hour, where scheduled runs are delayed least, and before the
+    # Monday 11:50 update.
+    - cron: "17 9 * * 1"
+      timezone: "Asia/Tokyo"
+  workflow_dispatch:
+
+# Nothing by default; the job states what it needs.
+permissions: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: Taka499/nudge/actions/cloudflare-token@ae2116bc8fd8229c5d30c495d7c89e5f05617c99 # v1.3.0
+        with:
+          endpoint: https://nudge.tia.run
+          token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

@@ -45,12 +45,12 @@ const stepsOf = (wf: Workflow, job: string): Step[] => wf.jobs[job]?.steps ?? []
 const allSteps = (wf: Workflow): Step[] => Object.values(wf.jobs).flatMap((job) => job.steps ?? []);
 
 /** The actions a workflow may use. Each must be pinned to a full commit hash: a tag can be moved to other code, a commit cannot. */
-const ALLOWED_ACTIONS = ["actions/checkout", "oven-sh/setup-bun", "astral-sh/setup-uv", "Taka499/nudge/actions/notify"];
+const ALLOWED_ACTIONS = ["actions/checkout", "oven-sh/setup-bun", "astral-sh/setup-uv", "Taka499/nudge/actions/notify", "Taka499/nudge/actions/cloudflare-token"];
 const PINNED = /^([^@\s]+)@[0-9a-f]{40}$/;
 
 describe("every workflow", () => {
   test("there are workflows to check", () => {
-    expect(FILES.toSorted()).toEqual(["check.yml", "update.yml"]);
+    expect(FILES.toSorted()).toEqual(["check.yml", "cloudflare-token.yml", "update.yml"]);
   });
 
   test("uses only allowed actions, each pinned to a full commit hash", () => {
@@ -143,5 +143,24 @@ describe("update.yml", () => {
 
   test("allows one run at a time and never cancels one halfway", () => {
     expect(load(text)).toMatchObject({ concurrency: { group: "update", "cancel-in-progress": false } });
+  });
+});
+
+describe("cloudflare-token.yml", () => {
+  const { wf } = read("cloudflare-token.yml");
+  const steps = allSteps(wf);
+
+  test("runs on Monday mornings in Japan and by hand, and can do nothing but mint an OIDC token", () => {
+    expect(Object.keys(wf.on).toSorted()).toEqual(["schedule", "workflow_dispatch"]);
+    expect(wf.on["schedule"]).toEqual([{ cron: "17 9 * * 1", timezone: "Asia/Tokyo" }]);
+    expect(wf.permissions).toEqual({});
+    expect(Object.values(wf.jobs).map((job) => job.permissions)).toEqual([{ "id-token": "write" }]);
+  });
+
+  test("checks the very token update.yml uploads with, as an account-owned token, through nudge", () => {
+    expect(steps.map((s) => (s.uses ?? "").split("@")[0])).toEqual(["Taka499/nudge/actions/cloudflare-token"]);
+    const token = "${{ secrets.CLOUDFLARE_API_TOKEN }}";
+    expect(steps[0]?.with).toEqual({ endpoint: "https://nudge.tia.run", token, "account-id": "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" });
+    expect(read("update.yml").text).toContain(`CLOUDFLARE_API_TOKEN: ${token}`);
   });
 });

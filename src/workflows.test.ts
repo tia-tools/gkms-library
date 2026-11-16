@@ -158,9 +158,13 @@ describe("cloudflare-token.yml", () => {
   });
 
   test("checks the very token update.yml uploads with, as an account-owned token, through nudge", () => {
-    expect(steps.map((s) => (s.uses ?? "").split("@")[0])).toEqual(["Taka499/nudge/actions/cloudflare-token"]);
+    // v1.3.0, the release that added the action; a change of commit is a decision, not drift.
+    expect(steps.map((s) => s.uses)).toEqual(["Taka499/nudge/actions/cloudflare-token@ae2116bc8fd8229c5d30c495d7c89e5f05617c99"]);
     const token = "${{ secrets.CLOUDFLARE_API_TOKEN }}";
-    expect(steps[0]?.with).toEqual({ endpoint: "https://nudge.tia.run", token, "account-id": "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" });
-    expect(read("update.yml").text).toContain(`CLOUDFLARE_API_TOKEN: ${token}`);
+    const account = "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}";
+    expect(steps[0]?.with).toEqual({ endpoint: "https://nudge.tia.run", token, "account-id": account });
+    const uploading = stepsOf(read("update.yml").wf, "update").find((s) => (s.run ?? "").includes("bun run daily"));
+    expect(uploading?.env?.["CLOUDFLARE_API_TOKEN"]).toBe(token);
+    expect(uploading?.env?.["CLOUDFLARE_ACCOUNT_ID"]).toBe(account);
   });
 });

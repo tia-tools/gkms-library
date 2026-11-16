@@ -30,7 +30,13 @@ async function main(args: readonly string[]): Promise<number> {
     console.error(USAGE);
     return 2;
   }
-  const error = command.verb === "put" ? await putOnce({ key: command.key, file: command.file, contentType: command.contentType, cacheControl: command.cacheControl }, command.bucket, realIo) : await getOnce(command.bucket, command.key, command.file, realIo);
+  let error: string | undefined;
+  try {
+    error = command.verb === "put" ? await putOnce({ key: command.key, file: command.file, contentType: command.contentType, cacheControl: command.cacheControl }, command.bucket, realIo) : await getOnce(command.bucket, command.key, command.file, realIo);
+  } catch (e) {
+    // A configuration error from r2.ts, such as a half-set key pair: its message names variables, never their values.
+    error = e instanceof Error ? e.message : String(e);
+  }
   if (error !== undefined) console.error(`${command.verb} ${command.bucket}/${command.key} failed: ${error}`);
   return error === undefined ? 0 : 1;
 }

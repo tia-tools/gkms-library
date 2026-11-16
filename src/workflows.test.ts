@@ -114,11 +114,17 @@ describe("update.yml", () => {
     expect(update.indexOf(checkout ?? {})).toBe(0);
   });
 
-  test("the whole run is one command, and the only step that sees the Cloudflare token", () => {
+  test("the whole run is one command, and the only step that sees the Cloudflare credentials", () => {
     expect(daily?.run?.split("\n").filter((line) => line.includes("bun run")).map((line) => line.trim())).toEqual(["bun run daily --allow-fewer", "bun run daily"]);
-    expect(Object.keys(daily?.env ?? {}).toSorted()).toEqual(["ALLOW_FEWER", "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN"]);
+    expect(daily?.env).toEqual({
+      R2_ACCESS_KEY_ID: "${{ secrets.R2_ACCESS_KEY_ID }}",
+      R2_SECRET_ACCESS_KEY: "${{ secrets.R2_SECRET_ACCESS_KEY }}",
+      CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}",
+      CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}",
+      ALLOW_FEWER: "${{ inputs.allow-fewer }}",
+    });
     expect(allSteps(wf).filter((s) => JSON.stringify(s).includes("secrets.")).map((s) => s.name)).toEqual([daily?.name]);
-    expect(text.match(/secrets\.[A-Z_]+/g)?.toSorted()).toEqual(["secrets.CLOUDFLARE_ACCOUNT_ID", "secrets.CLOUDFLARE_API_TOKEN"]);
+    expect(text.match(/secrets\.[A-Z_0-9]+/g)?.toSorted()).toEqual(["secrets.CLOUDFLARE_ACCOUNT_ID", "secrets.CLOUDFLARE_API_TOKEN", "secrets.R2_ACCESS_KEY_ID", "secrets.R2_SECRET_ACCESS_KEY"]);
     for (const step of update) {
       for (const command of ["wrangler", "bun run publish", "src/publish", "upload.py", "extract.py", "bun run generate"]) if (step !== daily) expect(step.run ?? "").not.toContain(command);
     }

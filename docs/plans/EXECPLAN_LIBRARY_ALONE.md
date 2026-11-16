@@ -589,4 +589,4 @@ Revision note, 2026-11-13 (#5, Milestone 3 built, after a Codex review of its co
 
 Revision note, 2026-11-13 (#5, the first publication): Progress, Outcomes and Concrete Steps record it; the format files are frozen from now on and pinned by `formats/pinned.test.ts`.
 
-Revision note, 2026-11-16 (#26, #23): decision L38 records how the uploads reach the two buckets with a token limited to them.
+Revision note, 2026-11-16 (#26, #23, after a Codex review of the branch): decision L38 records how the uploads reach the two buckets with a token limited to them. The review found the signing correct for every key the library writes, and the order and retries unchanged; its one finding was fixed: a failed request logged R2's error body, which can carry the access key id, and an exception's message, which can name the account's endpoint, and now logs only the status and R2's error code.

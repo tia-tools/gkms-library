@@ -57,7 +57,7 @@ Bun 1.4.3 for the data, Python with uv for the images.
     uv run extract.py                   # the images the data names and the address does not serve yet
     uv run upload.py --dry-run          # what would be uploaded
 
-`images/README.md` explains the image side. Uploading and publishing need a Wrangler login for the Cloudflare account that holds `tia.run`.
+`images/README.md` explains the image side. Uploading and publishing need a Wrangler login for the Cloudflare account that holds `tia.run`. The unattended run uses an S3 key pair instead (`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`), with which `src/r2.ts` calls R2's S3-compatible API itself.
 
     bun run publish --dry-run           # what a publication would upload
     bun run daily --dry-run             # the whole unattended run, uploading nothing

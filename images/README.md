@@ -26,7 +26,7 @@ Only images the data names are fetched or uploaded. The game's manifest also lis
 
 `fetch-vendor.sh` unpacks GkmasObjectManager (`AllenHeartcore/GkmasObjectManager`, GPL-3.0) into `vendor/`, at the commit in `GkmasObjectManager.sha`. It is not a Python package, so its requirements are listed in `pyproject.toml`. It is used only to fetch and decrypt the game's manifest and to download bundles; it runs on your machine or the runner and is never committed or distributed. To move to a newer commit, change the `.sha` file and run the script again.
 
-Uploading needs Wrangler, run through `bunx`, with a login for the Cloudflare account that holds `tia.run` (`bunx wrangler login`), or `CLOUDFLARE_API_TOKEN` in an unattended run.
+Uploading goes through one command of the data side, `bun src/r2-object.ts` (from `r2.py`; the code is `src/r2.ts`). On a person's machine it runs Wrangler through `bunx`, with a login for the Cloudflare account that holds `tia.run` (`bunx wrangler login`). In an unattended run it calls R2's S3-compatible API itself, with the key pair in `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` and the account id in `CLOUDFLARE_ACCOUNT_ID`. That pair belongs to a token that may write only the library's two buckets, and Wrangler cannot upload with such a token.
 
 ## The commands
 
@@ -53,7 +53,7 @@ An app that builds its own images from the game's art reads the masters with one
     bun run sync-masters -- --dest ~/masters
     bun run sync-masters -- --dest ~/masters --only 'img_sd_'
 
-It reads which images exist from the published data, downloads each master from the private bucket with this machine's Wrangler login, and skips files already in the destination. `--site out/site` reads the data from a local directory instead of the public address.
+It reads which images exist from the published data, downloads each master from the private bucket with this machine's Wrangler login (or the S3 key pair, when set), and skips files already in the destination. `--site out/site` reads the data from a local directory instead of the public address.
 
 ## Tests
 

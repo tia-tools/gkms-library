@@ -26,7 +26,10 @@ Each milestone is one issue and one branch, merged through a pull request into `
 - [x] (2026-11-12 21:04Z) Milestone 2 (#4): all 2,928 images the data names are extracted (none failed, none missing from the game) and uploaded, each master to `gkms-library-masters` and each public copy to `gkms-library`; a second plan finds nothing to upload; a master's name answers 404 at the public address; `bun run sync-masters` brought the 13 face masters and nothing on a second run. 55 Python tests pass, 28 mutations all caught. Complete once its pull request merges.
 - [x] (2026-11-13 02:35Z) Milestone 3 (#5), built: `bun run publish`, `bun run daily`, `compare --images`, `.github/workflows/update.yml` and the README. 168 tests, the type check and the lint pass; 26 mutations all caught; `bun run daily --dry-run` runs every step against the live address and would upload ten files.
 - [x] (2026-11-13 17:52Z) The user answered job #17 with A, and the data was published for the first time, by `bun run daily` on the owner's machine: five format files, four releases and the pointer, read back and checked. The five format files are now frozen, their hashes pinned by `formats/pinned.test.ts`. A second run found nothing to do; `bun run compare --site https://gkms-library.tia.run --images` reports no unexpected difference.
-- [ ] Milestone 3 (#5), remaining: the token and the two secrets (job #18); this milestone's pull request; the release merge of `develop` into `main`; a first run by hand on GitHub; two consecutive scheduled runs that succeed, with the Monday message; close-out.
+- [x] (2026-11-13 19:58Z) The user set the two secrets (job #18) and merged this milestone's pull request (#20) and the release of `develop` into `main` (#21). The first run on GitHub, started by hand (run 43496774597), succeeded in two and a half minutes: every format unchanged, all 2,928 images already served, nothing to upload, the comparison clean, and the notify job posted "Library update: nothing new" through nudge.
+- [x] (2026-11-16 11:20Z) The first scheduled run with something to upload (run 43846565276, 10:11Z) failed at "upload images": new releases of all four formats and 153 new images were built, but every put to `gkms-library-masters` was refused (403, Cloudflare code 10000), so nothing was uploaded and the pointer still names the last good releases. The token as L27 specified it cannot upload through Wrangler (Surprises & Discoveries). The user answered job #25 with C (L37): the token gets account-wide storage write now (job #24), and #26 narrows it back to the two buckets. #22 adds a weekly expiry check and #23 the race between parallel Wrangler installs.
+- [x] (2026-11-16 11:29Z) With the token's account-wide storage write added by the user, a run started by hand (run 43857411880) published: 153 images uploaded (each master, then its public copy), new releases of all four formats (idols 14, items 1,115, skill cards 1,829, support cards 215), the pointer last, read back and checked; the comparison found no unexpected difference. No put was refused. Seven first attempts failed on the parallel Wrangler installs (#23) and succeeded on their first retry. This proves the token.
+- [ ] Milestone 3 (#5), remaining: two consecutive scheduled runs that succeed, with the Monday message; close-out.
 
 ## Surprises & Discoveries
 
@@ -95,6 +98,9 @@ Each milestone is one issue and one branch, merged through a pull request into `
 
 - Observation: GitHub runs a scheduled workflow only from the repository's default branch, which here is `develop` so that a pull request's `Closes #N` closes its issue; and it disables schedules in a public repository after 60 days without activity. gakumas-supportcards avoids both because its default branch is production and its run commits data; the library's run commits nothing.
   Evidence: the comments of gakumas-supportcards' `update-data.yml` and its ADR 0008; `CLAUDE.md` § Tasks here. Consequence: L25.
+
+- Observation: a Cloudflare token holding only the object-level permissions "Workers R2 Storage Bucket Item Write" and "… Item Read" on named buckets cannot upload through Wrangler. `wrangler r2 object put` calls Cloudflare's main API (`api.cloudflare.com/…/r2/buckets/<bucket>/objects/<key>`), which refuses such a token with 403 and `{"code":10000,"message":"Authentication error"}`, even though Wrangler accepts the token and names the right account. Object-level tokens work only through R2's S3-compatible API, which signs requests with an access key id and secret. gakumas-supportcards' token never hit this because it holds the account-wide "Workers R2 Storage" permission; the library's first publication used the owner's Wrangler login.
+  Evidence: run 43846565276 (2026-11-16), 36 puts to `gkms-library-masters`, all refused that way; the token's permission policy as the user showed it; Cloudflare's R2 troubleshooting page § Object-level API tokens fail against the REST API (read 2026-11-16); cloudflare/workers-sdk#9235, closed as intended behaviour. Consequence: L37.
 
 ## Decision Log
 
@@ -243,6 +249,14 @@ The decisions are numbered L1, L2, … Decisions that outlive this plan are also
 - Decision: L36 — `bun run generate` writes every release the pointer names into the output directory, not only the new ones.
   Rationale: on a runner the directory starts empty, and the image steps and the publication read the releases from it; a kept release has the same hash as before, hence the same bytes.
   Date/Author: 2026-11-13, agent.
+
+- Decision: L37 — the unattended run's token holds account-wide R2 storage write for now, replacing L27's limit to the two buckets, so that the data waiting since 2026-11-16 publishes; #26 then narrows it back to the two buckets by moving the uploads from Wrangler to R2's S3-compatible API, and the account-wide permission is taken off.
+  Rationale: L27's token cannot upload through Wrangler (Surprises & Discoveries, 2026-11-16). Of the user's options in job #25 — account-wide only, the S3-compatible API only (about half a day before anything publishes), or the first now and the second next — the third unblocks the data at once and keeps L27's reason in sight: the update job holds this token beside third-party code (GkmasObjectManager, UnityPy, Wrangler), and an account-wide token can write every bucket of the account, the apps' shared bucket included.
+  Date/Author: 2026-11-16, user (job #25, answer C).
+
+- Decision: L38 — the unattended run uploads through R2's S3-compatible API with the key pair of a token limited to the two buckets (secrets `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`), not through Wrangler; this narrows the token of L37 back to what L27 wanted (#26). `src/r2.ts` is the one way into a bucket for both sides: with the pair set it signs each request itself with AWS Signature Version 4 (`src/sigv4.ts`, tested against AWS's two published S3 examples), and otherwise runs Wrangler with a person's login, which stays the local way. The image side calls it as `bun src/r2-object.ts put|get`, so a fresh runner no longer starts a download of Wrangler per upload thread, which raced (#23). A half-set pair is an error, never a quiet fall back to Wrangler.
+  Rationale: Cloudflare's main API, which Wrangler calls, refuses a token limited to buckets (Surprises & Discoveries, 2026-11-16), and the S3 API is the only one that accepts it. Bun's own S3 client cannot store a Cache-Control with an object, and every object here needs one, so the signing is written here instead; aws4fetch or the AWS command line would have been a new dependency, or one that depends on the runner's image. The secret is not derived from the token's value: Cloudflare documents that derivation only for tokens made through its user-token API, while R2's token page shows the pair for any token it makes.
+  Date/Author: 2026-11-16, agent, carrying out the user's answer C to job #25.
 
 ## Outcomes & Retrospective
 
@@ -447,8 +461,17 @@ A second `bun run daily` printed `unchanged` for each format, `10 file(s) alread
 
 On GitHub, once the secrets exist and `main` holds the code:
 
-    gh workflow run update.yml
-    gh run watch
+    $ gh workflow run update.yml --ref develop
+    $ gh run watch 43496774597 --exit-status
+    update: success, notify: success (2026-11-13T19:55:45Z to 19:58:10Z)
+
+    idols v1: 13 idols of 25 rows — unchanged   (and the three other formats)
+    manifest 205100:0085: the data names 2928 image(s); 2928 served by https://gkms-library.tia.run; 0 to extract; 0 not offered by the game
+    10 file(s) already at https://gkms-library.tia.run, 0 to upload
+    no unexpected difference
+    Library update: nothing new
+
+That run uploaded nothing, so it made no call that needs the Cloudflare token: the token is proven by the first run that has something to upload, and a token that fails then fails the run before the pointer moves, which the notify job reports.
 
 ## Validation and Acceptance
 
@@ -584,3 +607,11 @@ Revision note, 2026-11-13 (#4, after a Codex review of Milestone 2's code): the 
 Revision note, 2026-11-13 (#5, Milestone 3 built, after a Codex review of its code): Progress splits Milestone 3 into what is built and what remains; one observation (scheduled runs start hours late here, and the `timezone` key works) and decisions L35 and L36 were added. Of the review's five findings three were fixed: a comparison that crashes is now a failure of the report, not "no difference"; the publication reads its format files back as well; and the daily run removes an earlier run's report before it starts. Two were answered. That a schedule's `timezone` key is invalid: gakumas-supportcards' workflow uses it and runs twice a day, at times that fit Japan time and cannot fit UTC. That a kept release written locally could differ from the address's: an entry is kept only when the content's SHA-256 equals the one the pointer names, and the publication refuses a file that differs anyway.
 
 Revision note, 2026-11-13 (#5, the first publication): Progress, Outcomes and Concrete Steps record it; the format files are frozen from now on and pinned by `formats/pinned.test.ts`.
+
+Revision note, 2026-11-13 (#5, the first run on GitHub): Progress and Concrete Steps record it, and that it could not prove the token, having nothing to upload.
+
+Revision note, 2026-11-16 (#5, the first run that uploads): Progress, Surprises and decision L37 record that the bucket-limited token of L27 cannot upload through Wrangler, and the user's answer to job #25.
+
+Revision note, 2026-11-16 (#5, the token proven): Progress records the run that published with the account-wide token; what remains no longer lists proving the token.
+
+Revision note, 2026-11-16 (#26, #23, after a Codex review of the branch): decision L38 records how the uploads reach the two buckets with a token limited to them. The review found the signing correct for every key the library writes, and the order and retries unchanged; its one finding was fixed: a failed request logged R2's error body, which can carry the access key id, and an exception's message, which can name the account's endpoint, and now logs only the status and R2's error code. Before the merge, the user made the two-bucket token on R2's own page, stored its key pair as the secrets `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`, and from their own terminal read one master (`img_sd_hkne_face-00.webp`) through `bun src/r2-object.ts get` and wrote the same bytes back through `put`, both exiting 0 (job #27): the signing works against R2 with that token, for reading and for writing.

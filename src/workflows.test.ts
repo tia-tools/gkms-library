@@ -45,12 +45,12 @@ const stepsOf = (wf: Workflow, job: string): Step[] => wf.jobs[job]?.steps ?? []
 const allSteps = (wf: Workflow): Step[] => Object.values(wf.jobs).flatMap((job) => job.steps ?? []);
 
 /** The actions a workflow may use. Each must be pinned to a full commit hash: a tag can be moved to other code, a commit cannot. */
-const ALLOWED_ACTIONS = ["actions/checkout", "oven-sh/setup-bun", "astral-sh/setup-uv", "Taka499/nudge/actions/notify"];
+const ALLOWED_ACTIONS = ["actions/checkout", "oven-sh/setup-bun", "astral-sh/setup-uv", "Taka499/nudge/actions/notify", "Taka499/nudge/actions/cloudflare-token"];
 const PINNED = /^([^@\s]+)@[0-9a-f]{40}$/;
 
 describe("every workflow", () => {
   test("there are workflows to check", () => {
-    expect(FILES.toSorted()).toEqual(["check.yml", "update.yml"]);
+    expect(FILES.toSorted()).toEqual(["check.yml", "cloudflare-token.yml", "update.yml"]);
   });
 
   test("uses only allowed actions, each pinned to a full commit hash", () => {
@@ -114,11 +114,17 @@ describe("update.yml", () => {
     expect(update.indexOf(checkout ?? {})).toBe(0);
   });
 
-  test("the whole run is one command, and the only step that sees the Cloudflare token", () => {
+  test("the whole run is one command, and the only step that sees the Cloudflare credentials", () => {
     expect(daily?.run?.split("\n").filter((line) => line.includes("bun run")).map((line) => line.trim())).toEqual(["bun run daily --allow-fewer", "bun run daily"]);
-    expect(Object.keys(daily?.env ?? {}).toSorted()).toEqual(["ALLOW_FEWER", "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN"]);
+    expect(daily?.env).toEqual({
+      R2_ACCESS_KEY_ID: "${{ secrets.R2_ACCESS_KEY_ID }}",
+      R2_SECRET_ACCESS_KEY: "${{ secrets.R2_SECRET_ACCESS_KEY }}",
+      CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}",
+      CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}",
+      ALLOW_FEWER: "${{ inputs.allow-fewer }}",
+    });
     expect(allSteps(wf).filter((s) => JSON.stringify(s).includes("secrets.")).map((s) => s.name)).toEqual([daily?.name]);
-    expect(text.match(/secrets\.[A-Z_]+/g)?.toSorted()).toEqual(["secrets.CLOUDFLARE_ACCOUNT_ID", "secrets.CLOUDFLARE_API_TOKEN"]);
+    expect(text.match(/secrets\.[A-Z_0-9]+/g)?.toSorted()).toEqual(["secrets.CLOUDFLARE_ACCOUNT_ID", "secrets.CLOUDFLARE_API_TOKEN", "secrets.R2_ACCESS_KEY_ID", "secrets.R2_SECRET_ACCESS_KEY"]);
     for (const step of update) {
       for (const command of ["wrangler", "bun run publish", "src/publish", "upload.py", "extract.py", "bun run generate"]) if (step !== daily) expect(step.run ?? "").not.toContain(command);
     }
@@ -143,5 +149,28 @@ describe("update.yml", () => {
 
   test("allows one run at a time and never cancels one halfway", () => {
     expect(load(text)).toMatchObject({ concurrency: { group: "update", "cancel-in-progress": false } });
+  });
+});
+
+describe("cloudflare-token.yml", () => {
+  const { wf } = read("cloudflare-token.yml");
+  const steps = allSteps(wf);
+
+  test("runs on Monday mornings in Japan and by hand, and can do nothing but mint an OIDC token", () => {
+    expect(Object.keys(wf.on).toSorted()).toEqual(["schedule", "workflow_dispatch"]);
+    expect(wf.on["schedule"]).toEqual([{ cron: "17 9 * * 1", timezone: "Asia/Tokyo" }]);
+    expect(wf.permissions).toEqual({});
+    expect(Object.values(wf.jobs).map((job) => job.permissions)).toEqual([{ "id-token": "write" }]);
+  });
+
+  test("checks the very token update.yml uploads with, as an account-owned token, through nudge", () => {
+    // v1.3.0, the release that added the action; a change of commit is a decision, not drift.
+    expect(steps.map((s) => s.uses)).toEqual(["Taka499/nudge/actions/cloudflare-token@ae2116bc8fd8229c5d30c495d7c89e5f05617c99"]);
+    const token = "${{ secrets.CLOUDFLARE_API_TOKEN }}";
+    const account = "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}";
+    expect(steps[0]?.with).toEqual({ endpoint: "https://nudge.tia.run", token, "account-id": account });
+    const uploading = stepsOf(read("update.yml").wf, "update").find((s) => (s.run ?? "").includes("bun run daily"));
+    expect(uploading?.env?.["CLOUDFLARE_API_TOKEN"]).toBe(token);
+    expect(uploading?.env?.["CLOUDFLARE_ACCOUNT_ID"]).toBe(account);
   });
 });

@@ -7,8 +7,9 @@ docs/plans/EXECPLAN_LIBRARY_ALONE.md, L9).
     bun run sync-masters -- --dest ~/masters --only 'img_sd_'    # the idols' faces only
 
 It reads which images exist from the published data, downloads each master from the private bucket
-with `wrangler r2 object get`, using this machine's Wrangler login (`bunx wrangler login`, with the
-Cloudflare account that holds tia.run), and skips files already in the destination. A master the
+(r2.py), using this machine's Wrangler login (`bunx wrangler login`, with the Cloudflare account that
+holds tia.run) or an S3 key pair in R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY, and skips files
+already in the destination. A master the
 bucket does not hold, because the game does not offer that image yet, is listed and skipped.
 """
 
